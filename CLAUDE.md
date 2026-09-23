@@ -32,6 +32,16 @@ Erik must understand every line of this codebase and be able to explain it in in
 - Erik hand-writes the core pieces: auth, the pgvector query and prompt assembly. Review and explain these, but don't write them unless Erik asks.
 - Suggest decisions with a recommendation; don't make them silently.
 
+## Git workflow
+Follow a professional team workflow, even when working solo.
+- **Never commit directly to `main`.** Every change, including docs, goes through a pull request.
+- **One branch per change**, created from an up-to-date `main` (`git switch main && git pull`). Name it with a type prefix: `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `test/` (for example `feat/lure-crud`).
+- **Small, focused commits** using Conventional Commits: `type: short imperative summary` (for example `feat: add lure CRUD endpoints`). The body explains *why* when that isn't obvious.
+- **Open the PR with `gh pr create`.** The description covers what changed, why, how it was tested, and screenshots for UI changes. Reference the issue if there is one (`Closes #12`).
+- **Erik reviews and merges every PR.** Claude opens PRs but never merges them, and never pushes to `main` or force-pushes.
+- **Squash merge**, then delete the branch.
+- Tests (and CI, once it exists) must pass before a PR is opened.
+
 ## Conventions
 - Keep `docs/PROJECT_PLAN.md` in sync when decisions are made or scope changes.
 - Record significant decisions as ADRs in `docs/decisions/`.
