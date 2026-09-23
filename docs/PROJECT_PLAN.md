@@ -13,7 +13,7 @@ Nothing gets merged that Erik can't explain line by line. By the end, Erik shoul
 - **Hand-write the core pieces:** password hashing and JWT auth, the pgvector similarity query, and the prompt assembly for the LLM. Claude can review and explain these, but Erik writes them.
 - **Explain-back rule:** after each feature, Erik explains it out loud or in writing (what it does, why it's built that way, and what the alternatives were) before moving on. If the explanation has gaps, go back to the code.
 - **Walkthrough notes:** keep short notes in `docs/walkthroughs/` for each major flow (signup to login to an authenticated request; adding a lure; a recommendation request from start to finish).
-- **Interview question bank:** keep a running list in `docs/INTERVIEW_PREP.md` of questions an interviewer might ask ("Why pgvector instead of Pinecone?", "How do you keep JWTs from being forged?", "What happens if the LLM recommends a lure the user doesn't own?"), and practice answering them.
+- **Interview question bank:** keep a running list of questions an interviewer might ask ("Why pgvector instead of Pinecone?", "How do you keep JWTs from being forged?", "What happens if the LLM recommends a lure the user doesn't own?"), and practice answering them. It stays private: `docs/INTERVIEW_PREP.md` is gitignored and backed up in Erik's notes app.
 
 ### 2. Architecture and design
 Build the backend the way a professional team would, and be able to explain why it's organized that way.

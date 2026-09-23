@@ -46,3 +46,4 @@ Follow a professional team workflow, even when working solo.
 - Keep `docs/PROJECT_PLAN.md` in sync when decisions are made or scope changes.
 - Record significant decisions as ADRs in `docs/decisions/`.
 - Career and resume context is in `docs/CAREER_CONTEXT.md`. It isn't needed for coding tasks.
+- `docs/INTERVIEW_PREP.md` is Erik's private question bank. It may not exist in a fresh clone. When a feature is finished, suggest new questions for it.
