@@ -3,8 +3,9 @@
 .env.*
 !.env.example
 
-# Private notes (job search context, not for the public repo)
+# Private notes (job search and interview practice, not for the public repo)
 docs/CAREER_CONTEXT.md
+docs/INTERVIEW_PREP.md
 
 # Python
 __pycache__/
