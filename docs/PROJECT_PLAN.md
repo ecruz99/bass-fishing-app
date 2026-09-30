@@ -59,6 +59,10 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **Quantity:** The lures table has a `quantity` column (integer, defaults to 1), because people often own several of the same lure.
 
+**Lure catalog:** A shared master catalog of popular lures that users can pick from when adding to their inventory. They can still add their own lures by hand. Picking from the catalog is faster than typing everything in, and it keeps lure data consistent (brand names, types and techniques), which improves recommendations.
+- **Data source:** first look for official product data feeds (manufacturer or retailer, often through affiliate programs). Scrape only sites whose `robots.txt` and terms of service allow it. Rate-limit requests and identify the scraper honestly. Store facts only (brand, model, type, sizes, color names), never copied descriptions or product images.
+- **Timing:** the schema supports the catalog from Milestone 2 (a nullable `catalog_lure_id` on `lures`), so no migration of existing data is needed later. The scraper and catalog search are built in Milestone 7, after the recommendation feature ships.
+
 **Recommendation history:** Saved. Each recommendation stores the conditions, the output and an optional "did it work?" rating from the user. This adds about a day of work. It gives users a history of what worked, gives the project a feedback loop to talk about, and the ratings could later be used to improve retrieval.
 
 **Knowledge base authoring:** Erik drafts every entry from Erik's own fishing knowledge, and Claude refines it for clarity, gaps and consistent format. The domain knowledge stays Erik's to explain.
@@ -70,7 +74,8 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 ## Database Schema (finalize column types in Milestone 1)
 - `users`: id, email (unique), hashed_password, created_at
-- `lures`: id, user_id (FK → users), name, type, brand, color, size, technique, quantity (default 1), notes, created_at, updated_at
+- `lures`: id, user_id (FK → users), catalog_lure_id (nullable FK → catalog_lures; null for lures the user added by hand), name, type, brand, color, size, technique, quantity (default 1), notes, created_at, updated_at
+- `catalog_lures`: id, brand, model, type, technique, sizes (text[]), colors (text[]), source_name, source_url, last_scraped_at, created_at. Shared by all users; unique on (brand, model). `type` and `technique` use the same fixed lists as `lures`.
 - `knowledge_base_entries`: id, title, content (text), category (e.g. clarity, season, structure, weather), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
 - `recommendations`: id, user_id (FK → users), conditions (JSONB), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning, saved as a snapshot so the history still reads correctly if a lure is later deleted), worked (nullable boolean: the "did it work?" rating), created_at
 
@@ -90,6 +95,7 @@ Why JSONB for conditions and results: the set of conditions will probably change
 - Auth: `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
 - Lures: `GET/POST /api/v1/lures`, `GET/PATCH/DELETE /api/v1/lures/{id}`, all limited to the current user
 - Recommendations: `POST /api/v1/recommendations`, `GET /api/v1/recommendations` (history), `PATCH /api/v1/recommendations/{id}` (rating)
+- Catalog: `GET /api/v1/catalog?search=...` (search the shared catalog when adding a lure); filled by the scraper/import script, not by users
 - Knowledge base: loaded by a seed/admin script, not a public endpoint
 
 ## Milestones
@@ -110,13 +116,14 @@ Set up the repo structure, the layered backend skeleton, Alembic, and a local Po
 ### Milestone 2: Lure inventory API
 CRUD endpoints for lures, limited to the current user.
 - **Decide:** should `type` and `technique` be fixed lists (enums or lookup tables) or free text? Recommendation: fixed lists. Consistent values make it much easier for the LLM to match lures to knowledge base entries, while free text like "crank" vs. "crankbait" gets messy.
+- **Decide (ADR):** when a lure is linked to the catalog, should its attributes be copied onto the user's row (simple, and users can edit them) or read through the link (no duplication, but harder to customize)? Include the nullable `catalog_lure_id` column either way.
 - **Done when:** all lure endpoints work with validation, pagination and consistent errors; one user can never read or change another user's lures (with a test that proves it); service-layer tests pass.
 
 ### Milestone 3: Frontend inventory
 Scaffold the React app. Build the signup and login pages and the inventory screens, working end to end.
 - **Decide:** frontend tooling (Vite) and whether to use TypeScript. TypeScript is worth considering because it's widely expected in industry.
 - **Done when:** a new user can sign up, log in, and add, edit and delete lures in the browser against the real API.
-- **Check-in (Claude: ask Erik when this milestone is finished):** the current decision is to deploy only in Milestone 7, once the app is ready. Ask whether Erik still wants that, or would now rather do a basic deploy of auth and inventory to get a live link sooner.
+- **Check-in (Claude: ask Erik when this milestone is finished):** the current decision is to deploy only in Milestone 8, once the app is ready. Ask whether Erik still wants that, or would now rather do a basic deploy of auth and inventory to get a live link sooner.
 
 ### Milestone 4: Knowledge base and embeddings
 Erik drafts the knowledge base (50 to 150 entries) and Claude refines it. Build the embedding and seed pipeline with Voyage AI and pgvector.
@@ -133,11 +140,16 @@ Build retrieval and the Claude generation step, including checking the output ag
 The conditions form, the results display, the history view and the "did it work?" rating.
 - **Done when:** the whole flow works in the browser, from entering conditions to seeing results to rating them later from history.
 
-### Milestone 7: Deploy and polish
+### Milestone 7: Lure catalog
+Build the shared catalog: research data sources, build the scraper or feed importer, clean and de-duplicate the data (for example "KVD 1.5" vs. "KVD 1.5 Squarebill"), and add catalog search to the add-lure screen.
+- **Before writing the scraper:** for each candidate site, check `robots.txt` and the terms of service, and write an ADR covering which sources are used and why.
+- **Done when:** the catalog has a useful set of popular bass lures; the importer can be re-run safely without creating duplicates; users can search the catalog and add a lure from it, or still add one by hand; scraping is rate-limited and respects each site's rules.
+
+### Milestone 8: Deploy and polish
 Polish the UI, deploy to Render, Neon and Vercel, and write the README (including an architecture diagram and a note about the free tier's slow first request).
 - **Done when:** the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
 
-### Milestone 8: Showcase
+### Milestone 9: Showcase
 Write a short demo write-up and consider a demo video for LinkedIn. Do a full mock-interview walkthrough of the codebase, and write the resume bullets (see `docs/CAREER_CONTEXT.md`).
 - **Done when:** Erik can give a 5-minute walkthrough of the app and a 15-minute deep dive into the architecture, and answer every question in the interview question bank.
 
