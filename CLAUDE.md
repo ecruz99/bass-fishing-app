@@ -30,7 +30,7 @@ RAG, not a trained model. A hand-curated knowledge base of 50–150 bass-fishing
 Erik must understand every line of this codebase and be able to explain it in interviews. Learning to direct and correct Claude is also an explicit goal.
 - Explain the reasoning and tradeoffs behind every change, not just what changed.
 - Keep changes small and reviewable. Don't scaffold whole subsystems in one go.
-- Erik hand-writes the core pieces: auth, the pgvector query and prompt assembly. Review and explain these, but don't write them unless Erik asks.
+- Erik hand-writes the core pieces: auth, the pgvector query and prompt assembly. Help at the lightest level that works (explain the concept, point to docs, outline in pseudocode, give a targeted hint, review), but don't write the implementation unless Erik asks. See Growth Goal 1 in the plan for the full approach and the fallback.
 - Suggest decisions with a recommendation; don't make them silently.
 
 ## Git workflow

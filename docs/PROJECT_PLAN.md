@@ -10,7 +10,12 @@ Shipping the app is only half the point. The project is also a deliberate way fo
 
 ### 1. Understand and explain every part of the codebase
 Nothing gets merged that Erik can't explain line by line. By the end, Erik should be able to walk an interviewer through any file, any design decision and any tradeoff.
-- **Hand-write the core pieces:** password hashing and JWT auth, the pgvector similarity query, and the prompt assembly for the LLM. Claude can review and explain these, but Erik writes them.
+- **Hand-write the core pieces:** password hashing and JWT auth, the pgvector similarity query, and the prompt assembly for the LLM. These are the parts interviewers will ask about most.
+  - **"Hand-written" means Erik types the code and makes the decisions, not that it's written from memory or without help.** Docs, tutorials and questions to Claude are all expected.
+  - **How Claude helps, from lightest to heaviest:** explain the concept → point to the right docs section → outline the steps in plain English or pseudocode → give a targeted hint on a specific line or error → review the finished code. Claude doesn't write the implementation.
+  - **Break the work into single-function steps.** Each step is small enough to finish in one sitting, gets reviewed before moving on, and has tests where it makes sense.
+  - **Fallback if it isn't working:** Claude writes the piece, Erik studies it until every line can be explained, then writes a related feature solo (for auth, a "change password" endpoint). Stuck for an hour on one line? Ask for a bigger hint rather than grinding.
+  - **The test for any code, whoever typed it:** could Erik rebuild it from a blank file, using the docs, in a reasonable amount of time?
 - **Explain-back rule:** after each feature, Erik explains it out loud or in writing (what it does, why it's built that way, and what the alternatives were) before moving on. If the explanation has gaps, go back to the code.
 - **Walkthrough notes:** keep short notes in `docs/walkthroughs/` for each major flow (signup to login to an authenticated request; adding a lure; a recommendation request from start to finish).
 - **Interview question bank:** keep a running list of questions an interviewer might ask ("Why pgvector instead of Pinecone?", "How do you keep JWTs from being forged?", "What happens if the LLM recommends a lure the user doesn't own?"), and practice answering them. It stays private: `docs/INTERVIEW_PREP.md` is gitignored and backed up in Erik's notes app.
@@ -111,6 +116,14 @@ Every milestone also includes:
 Set up the repo structure, the layered backend skeleton, Alembic, and a local Postgres with pgvector. Hand-write signup, login and the JWT dependency.
 - **Decide:** where the frontend stores tokens (in memory with an `Authorization` header, or an httpOnly cookie). Look up the XSS/CSRF tradeoff and write an ADR.
 - **Write ADRs:** stack, RAG vs. a trained model, hand-written auth.
+- **Auth, hand-written in single-function steps** (Erik writes each one; Claude explains, points to docs and reviews):
+  1. Hash a password and verify one (`pwdlib`), with tests
+  2. Create a JWT with an expiry
+  3. Decode and validate a JWT, rejecting ones that are expired or have a bad signature
+  4. The `get_current_user` dependency
+  5. The signup endpoint
+  6. The login endpoint
+- **Check-in (Claude: ask Erik after auth steps 1 and 2):** is the step-by-step approach working? If yes, continue through step 6. If it feels like no progress is being made, switch to the fallback in Growth Goal 1: Claude writes the rest of auth, Erik learns it until it can be explained line by line, then writes the "change password" endpoint alone.
 - **Done when:** a user can sign up, log in and call a protected endpoint; migrations run cleanly from an empty database; the auth logic has pytest tests.
 
 ### Milestone 2: Lure inventory API
