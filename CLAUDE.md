@@ -2,38 +2,26 @@
 
 Bass lure inventory tracker with AI recommendations: users log the lures they own, enter fishing conditions, and get recommendations drawn from their own inventory. It's a portfolio project, so clean code, a live deployment, and a clear technical story matter.
 
-The full plan, decisions, and timeline are in `docs/PROJECT_PLAN.md`. Read it before starting significant work, and keep it updated when decisions change.
+`docs/PROJECT_PLAN.md` holds the plan, every decision and its reasoning. It's the single source of truth: read the relevant milestone and Decisions sections before starting work, and keep them updated when decisions change. `/milestone-brief <number> <kickoff|wrap-up>` summarizes a milestone at its start and checks it at its end.
 
 ## Status
-Planning and brainstorming. No code yet.
+Planning done. No code yet.
 
-## Stack (decided)
-- Backend: FastAPI (Python)
-- Database: PostgreSQL + pgvector (embeddings live in the same DB)
-- Frontend: React
-- Web first; a mobile app is a stretch goal only, so the backend is a JSON API that a mobile client can reuse unchanged
+## Stack and code conventions
+- FastAPI (Python), PostgreSQL + pgvector, React. Claude API for generation, Voyage AI for embeddings. Web first; the backend is a JSON API a future mobile client could reuse.
+- Backend layers: routers (HTTP only) → services (business logic) → repositories (database access). Pydantic schemas stay separate from SQLAlchemy models.
+- Every schema change goes through an Alembic migration. Never edit the database by hand.
+- Tooling: `uv`, `ruff`, `mypy`, `pytest`; docker-compose runs only the local Postgres + pgvector.
 
-## Recommendation approach
-RAG, not a trained model. A hand-curated knowledge base is embedded into pgvector. It starts with 50–150 of Erik's own entries and grows in stages (personal recommendations plus transcribed charts, facts only, each entry tagged with conditions and source). At request time, retrieve the entries relevant to the conditions and pass them plus the user's lure inventory to an LLM, which recommends lures the user actually owns.
-
-RAG has to earn its place: an eval harness (Milestone 6, ADR 0001) compares no knowledge base, the whole knowledge base in the prompt, vector top-k, and metadata filter + vector, using Erik's scenarios with a held-out set.
-
-Each recommended lure cites the knowledge base entries it's based on. Citations are validated against the retrieved entries (like lure ownership), shown in the UI as titles with source labels, and snapshotted into history. Entry content is never sent to the client; the API returns only titles, sources and scores. Entries have a stable `slug`, so re-seeding never changes their IDs.
-
-## Key decisions (details and reasoning in the plan)
-- AI: Claude API for generation, Voyage AI for embeddings
-- Auth: hand-written JWT in FastAPI (no auth framework or hosted auth; PyJWT and pwdlib only), with Argon2 via `pwdlib`. Revocation uses `users.token_version`; change password and log out everywhere increment it. Login and signup are rate limited per IP and per email from Milestone 1. Refresh tokens, password reset and email verification are post-launch stretch goals
-- Lures use simple attributes (type, brand, color, size, technique, quantity, notes), not detailed action or depth specs
-- Recommendations are saved with typed condition columns, a JSONB result snapshot, one `recommendation_picks` row per pick, and a "did it work?" rating that can record which lure was used ("query what you filter, snapshot what you display")
-- Catch log (Milestone 8): users log catches (species, count, biggest fish, lure, conditions, water body name, notes), standalone or from a recommendation. No GPS. Catches aren't sent to the LLM; personalizing from catches is a stretch goal
-- Analytics (Milestone 9): user-facing Recharts charts (inventory breakdown, timeline, most and never recommended, catches by lure and condition, success rates shown only at 5 or more data points) plus a public system stats page; no visitor tracking
-- Shared lure catalog: a hand-seeded catalog of 30 to 50 lures before launch (Milestone 10); a scraped catalog is a post-launch v2 (official data feeds first, scraping only where `robots.txt` and the terms of service allow it, facts only). `lures.catalog_lure_id` is nullable, so users can still add lures by hand
-- Conditions are entered manually for the MVP; auto-filling weather from Open-Meteo is a stretch goal
-- Hosting: Render (API), Neon (Postgres + pgvector), Vercel (frontend). Deployed early (backend in Milestone 1, frontend in Milestone 3) with auto-deploy on merge to `main`; the cold start is handled with a frontend wake-up screen and a keep-warm ping
-- Demo: a shared demo account with a stocked inventory and history, reset nightly, plus a pre-computed real recommendation on the landing page (Milestone 11). Demo visitors can't edit free text, and demo recommendations are limited per IP and per day
-- Safeguards: provider spend limits, a per-user daily quota (a count of `recommendations` rows), per-IP rate limiting with `slowapi`, defined LLM failure handling, cost and latency metrics on each recommendation, and prompt injection mitigations (delimited user data, length limits)
-- Backend layers: routers → services → repositories, Pydantic schemas separate from SQLAlchemy models, all schema changes through Alembic
-- Tooling: `uv`, `ruff`, `mypy`; docker-compose runs only the local Postgres + pgvector; GitHub Actions CI on every PR; branch protection on `main`; a Claude Code hook and a pre-commit hook run `ruff`
+## Rules the code must never break
+- Recommendations only include lures the user owns, and only cite knowledge base entries that were retrieved for that request. Both are checked in code, not just requested in the prompt.
+- Knowledge base entry content is never sent to the client. The API returns titles, sources and scores only.
+- Every query for user data (lures, recommendations, catches) is scoped to the current user.
+- No paid API call happens before the rate limit, quota and empty-inventory checks.
+- User text in prompts is wrapped in delimiters and length-limited.
+- No GPS or exact locations are stored.
+- The shared demo account can't edit free text and can't be deleted.
+- Secrets live only in environment variables and are never committed.
 
 ## Working with Erik
 Erik must understand every line of this codebase and be able to explain it in interviews. Learning to direct and correct Claude is also an explicit goal.
@@ -50,9 +38,10 @@ Follow a professional team workflow, even when working solo.
 - **Open the PR with `gh pr create`.** The description covers what changed, why, how it was tested, and screenshots for UI changes. Reference the issue if there is one (`Closes #12`).
 - **Erik reviews and merges every PR.** Claude opens PRs but never merges them, and never pushes to `main` or force-pushes.
 - **Squash merge**, then delete the branch.
-- Run the tests and linters locally before opening a PR. CI runs on the PR and must pass before merging (enforced by branch protection once it's set up in Milestone 1).
+- Run the tests and linters locally before opening a PR. CI runs on the PR and must pass before merging (enforced by branch protection once it's set up).
 
 ## Conventions
+- Keep this file short: rules and pointers only. Decisions and their details live in the plan. Don't put milestone numbers here; refer to features by name.
 - Keep `docs/PROJECT_PLAN.md` in sync when decisions are made or scope changes.
 - Record significant decisions as ADRs in `docs/decisions/`: ones that are hard to reverse, affect several parts of the system, or that an interviewer would ask about. Start from `0000-template.md` and keep each to one page (about 400 words).
 - Career and resume context is in `docs/CAREER_CONTEXT.md`. It isn't needed for coding tasks.
