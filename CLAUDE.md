@@ -14,14 +14,16 @@ Planning and brainstorming. No code yet.
 - Web first; a mobile app is a stretch goal only, so the backend is a JSON API that a mobile client can reuse unchanged
 
 ## Recommendation approach
-RAG, not a trained model. A hand-curated knowledge base of 50–150 bass-fishing entries is embedded into pgvector. At request time, retrieve the entries relevant to the conditions and pass them plus the user's lure inventory to an LLM, which recommends lures the user actually owns.
+RAG, not a trained model. A hand-curated knowledge base is embedded into pgvector. It starts with 50–150 of Erik's own entries and grows in stages (personal recommendations plus transcribed charts, facts only, each entry tagged with conditions and source). At request time, retrieve the entries relevant to the conditions and pass them plus the user's lure inventory to an LLM, which recommends lures the user actually owns.
+
+RAG has to earn its place: an eval harness (Milestone 6, ADR 0001) compares no knowledge base, the whole knowledge base in the prompt, vector top-k, and metadata filter + vector, using Erik's scenarios with a held-out set.
 
 ## Key decisions (details and reasoning in the plan)
 - AI: Claude API for generation, Voyage AI for embeddings
 - Auth: hand-written JWT in FastAPI (no auth library or hosted auth)
 - Lures use simple attributes (type, brand, color, size, technique, quantity, notes), not detailed action or depth specs
 - Recommendations are saved with conditions, result and a "did it work?" rating
-- Shared lure catalog: a hand-seeded catalog of 30 to 50 lures before launch (Milestone 7); a scraped catalog is a post-launch v2 (official data feeds first, scraping only where `robots.txt` and the terms of service allow it, facts only). `lures.catalog_lure_id` is nullable, so users can still add lures by hand
+- Shared lure catalog: a hand-seeded catalog of 30 to 50 lures before launch (Milestone 8); a scraped catalog is a post-launch v2 (official data feeds first, scraping only where `robots.txt` and the terms of service allow it, facts only). `lures.catalog_lure_id` is nullable, so users can still add lures by hand
 - Conditions are entered manually for the MVP; auto-filling weather from Open-Meteo is a stretch goal
 - Hosting: Render (API), Neon (Postgres + pgvector), Vercel (frontend)
 - Backend layers: routers → services → repositories, Pydantic schemas separate from SQLAlchemy models, all schema changes through Alembic
@@ -30,7 +32,7 @@ RAG, not a trained model. A hand-curated knowledge base of 50–150 bass-fishing
 Erik must understand every line of this codebase and be able to explain it in interviews. Learning to direct and correct Claude is also an explicit goal.
 - Explain the reasoning and tradeoffs behind every change, not just what changed.
 - Keep changes small and reviewable. Don't scaffold whole subsystems in one go.
-- Erik hand-writes the core pieces: auth, the pgvector query and prompt assembly. Help at the lightest level that works (explain the concept, point to docs, outline in pseudocode, give a targeted hint, review), but don't write the implementation unless Erik asks. See Growth Goal 1 in the plan for the full approach and the fallback.
+- Erik hand-writes the core pieces: auth, the pgvector query, prompt assembly and the eval scoring logic. Help at the lightest level that works (explain the concept, point to docs, outline in pseudocode, give a targeted hint, review), but don't write the implementation unless Erik asks. See Growth Goal 1 in the plan for the full approach and the fallback.
 - Suggest decisions with a recommendation; don't make them silently.
 
 ## Git workflow

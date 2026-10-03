@@ -10,7 +10,7 @@ Shipping the app is only half the point. The project is also a deliberate way fo
 
 ### 1. Understand and explain every part of the codebase
 Nothing gets merged that Erik can't explain line by line. By the end, Erik should be able to walk an interviewer through any file, any design decision and any tradeoff.
-- **Hand-write the core pieces:** password hashing and JWT auth, the pgvector similarity query, and the prompt assembly for the LLM. These are the parts interviewers will ask about most.
+- **Hand-write the core pieces:** password hashing and JWT auth, the pgvector similarity query, the prompt assembly for the LLM, and the eval harness's scoring logic (the scoring functions and the variant comparison; Claude can help with the runner and boilerplate). These are the parts interviewers will ask about most.
   - **"Hand-written" means Erik types the code and makes the decisions, not that it's written from memory or without help.** Docs, tutorials and questions to Claude are all expected.
   - **How Claude helps, from lightest to heaviest:** explain the concept → point to the right docs section → outline the steps in plain English or pseudocode → give a targeted hint on a specific line or error → review the finished code. Claude doesn't write the implementation.
   - **Break the work into single-function steps.** Each step is small enough to finish in one sitting, gets reviewed before moving on, and has tests where it makes sense.
@@ -51,6 +51,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 **Recommendation approach:** RAG (Retrieval-Augmented Generation), not a custom-trained ML model.
 - Reasoning: training a real ML model needs labeled data Erik doesn't have and would take up most of the timeline. RAG is achievable, closer to what employers are hiring for now, and makes a stronger interview story ("I understand embeddings, vector search and prompt engineering", not just "I called an API").
 - Recommendation logic lives in the retrieved knowledge base, not in hardcoded if/else rules.
+- RAG has to earn its place: an eval harness compares it against Claude with no knowledge base and with the whole knowledge base in the prompt (see Evaluation and ADR 0001).
 
 **AI providers:** Claude (Anthropic API) generates the recommendations. Voyage AI creates the embeddings; Anthropic recommends it, since Anthropic has no embeddings API of its own. That means two API keys, both kept in environment variables and never committed.
 
@@ -66,11 +67,16 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **Lure catalog:** A shared master catalog of popular lures that users can pick from when adding to their inventory. They can still add their own lures by hand. Picking from the catalog is faster than typing everything in, and it keeps lure data consistent (brand names, types and techniques), which improves recommendations.
 - **Data source (v2 scraped catalog):** first look for official product data feeds (manufacturer or retailer, often through affiliate programs). Scrape only sites whose `robots.txt` and terms of service allow it. Rate-limit requests and identify the scraper honestly. Store facts only (brand, model, type, sizes, color names), never copied descriptions or product images.
-- **Timing:** the schema supports the catalog from Milestone 2 (a nullable `catalog_lure_id` on `lures`), so no migration of existing data is needed later. Before launch, Milestone 7 builds a small **hand-seeded catalog** (30 to 50 popular lures, no scraping) plus catalog search, so a recruiter trying the demo can pick lures instead of typing them in. The full **scraped catalog is a v2 after launch** (see Stretch Goals). It was postponed because it would add 20 to 35 hours before launch for little gain in interviews, while shipping sooner does more for the job search. Shipping it after launch also shows continued work on a live product.
+- **Timing:** the schema supports the catalog from Milestone 2 (a nullable `catalog_lure_id` on `lures`), so no migration of existing data is needed later. Before launch, Milestone 8 builds a small **hand-seeded catalog** (30 to 50 popular lures, no scraping) plus catalog search, so a recruiter trying the demo can pick lures instead of typing them in. The full **scraped catalog is a v2 after launch** (see Stretch Goals). It was postponed because it would add 20 to 35 hours before launch for little gain in interviews, while shipping sooner does more for the job search. Shipping it after launch also shows continued work on a live product.
 
-**Recommendation history:** Saved. Each recommendation stores the conditions, the output and an optional "did it work?" rating from the user. This adds about a day of work. It gives users a history of what worked, gives the project a feedback loop to talk about, and the ratings could later be used to improve retrieval.
+**Recommendation history:** Saved. Each recommendation stores the conditions, the output and an optional "did it work?" rating from the user. This adds about a day of work. It gives users a history of what worked. With few users the ratings will be sparse, so describe them honestly: feedback collected for future re-ranking, not a working feedback loop. Recommendation quality is measured by the eval harness instead (see Evaluation).
 
-**Knowledge base authoring:** Erik drafts every entry from Erik's own fishing knowledge, and Claude refines it for clarity, gaps and consistent format. The domain knowledge stays Erik's to explain.
+**Knowledge base authoring:** Erik writes or transcribes every entry, and Claude refines it for clarity, gaps and consistent format. The domain knowledge stays Erik's to explain.
+- **One entry = one self-contained tip.** Entries are written by hand, so no automatic chunking is needed. Revisit this only if long documents are ever imported directly.
+- **Grown in stages:** stage 1 is 50 to 150 entries from Erik's own knowledge. After the first eval run, expand toward a larger knowledge base (more personal recommendations plus external charts and flow charts), then re-run the eval to measure whether the expansion helped.
+- **Charts and flow charts are transcribed into text entries**, tagged with the conditions they apply to (for example season, clarity, water temperature range). The tags also power eval variant D. Images are not embedded directly.
+- **External sources follow the catalog's facts-only rule:** restate facts in Erik's own words, never copy text or images, and record each entry's source type (personal or external), source name and URL.
+- **Conflicting advice:** keep both entries, tagged with their source. The prompt tells Claude to prefer Erik's personal entries when they conflict. Only exact duplicates are merged.
 
 **Hosting:**
 - Backend: Render (free tier sleeps when idle, so the first request is slow. That's acceptable for a portfolio app; note it in the README.)
@@ -81,7 +87,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - `users`: id, email (unique), hashed_password, created_at
 - `lures`: id, user_id (FK → users), catalog_lure_id (nullable FK → catalog_lures; null for lures the user added by hand), name, type, brand, color, size, technique, quantity (default 1), notes, created_at, updated_at
 - `catalog_lures`: id, brand, model, type, technique, sizes (text[]), colors (text[]), source_name (`seed` for hand-seeded entries), source_url (nullable), last_scraped_at (nullable; set by the v2 scraper), created_at. Shared by all users; unique on (brand, model). `type` and `technique` use the same fixed lists as `lures`.
-- `knowledge_base_entries`: id, title, content (text), category (e.g. clarity, season, structure, weather), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
+- `knowledge_base_entries`: id, title, content (text), category (e.g. clarity, season, structure, weather), condition tags (for example season, clarity, water temperature range; exact columns decided in Milestone 4), source_type (`personal` or `external`), source_name, source_url (nullable), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
 - `recommendations`: id, user_id (FK → users), conditions (JSONB), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning, saved as a snapshot so the history still reads correctly if a lure is later deleted), worked (nullable boolean: the "did it work?" rating), created_at
 
 Why JSONB for conditions and results: the set of conditions will probably change while the project is being built, and history rows are only ever read as a whole, never filtered by individual fields. If filtering by field becomes necessary later, move those fields into real columns with a migration.
@@ -91,10 +97,31 @@ Why JSONB for conditions and results: the set of conditions will probably change
 2. The service builds a text query from the conditions (for example "stained water, early spring, 52°F water, windy, falling pressure, overcast").
 3. The query is embedded with Voyage AI.
 4. pgvector returns the top-k most similar knowledge base entries by cosine distance (start with k=5 and tune it).
-5. The prompt sent to Claude contains the conditions, the retrieved entries and the user's lure inventory, with instructions to recommend **only** lures from that inventory and to explain why each one fits.
+5. The prompt sent to Claude contains the conditions, the retrieved entries and the user's lure inventory, with instructions to recommend **only** lures from that inventory, to explain why each one fits, and to prefer Erik's personal entries when retrieved entries conflict.
 6. Claude returns structured output (lure IDs plus reasoning). The service checks that every returned ID belongs to the user's inventory, so the model can't recommend a lure the user doesn't own.
 7. The service saves a `recommendations` row and returns the result.
 8. Later, the user can rate it with `PATCH /api/v1/recommendations/{id}` (`worked: true/false`).
+
+## Evaluation
+An eval harness measures whether the knowledge base and retrieval actually improve recommendations. Without it there's no answer to "why retrieve at all?" or "does the knowledge base beat Claude's own knowledge?" (ADR 0001).
+
+**Scenarios:** 30 to 50 test cases. Each has a set of conditions plus "good picks" and "bad picks" by lure type, written by Erik as the domain expert. Every scenario runs against the same fixed test inventory (about 25 lures), so scores are comparable across runs. Include edge cases: a tiny inventory, and conditions with no good match.
+
+**Held-out set:** about a third of the scenarios stay unseen while the knowledge base is written and are used only for the final measurement. This keeps the knowledge base from being tailored to the test.
+
+**Variants compared:**
+- **A. No knowledge base:** Claude's own knowledge only. The baseline every other variant must beat.
+- **B. Whole knowledge base in the prompt:** tests whether retrieval beats simply giving Claude everything. It stops being viable as the knowledge base grows, and the eval shows where that crossover happens.
+- **C. Vector top-k:** the planned pipeline.
+- **D. Metadata filter, then vector:** filter entries by condition tags (season, clarity and so on), then rank by similarity.
+
+**Scoring:**
+- **Picks (scored by code):** the share of recommended lures whose type is in the scenario's good list, the share in its bad list, and any invalid IDs. This works because Claude returns structured output (lure IDs) and every lure has a `type`.
+- **Retrieval (scored by code):** recall@5, meaning how many of the entries Erik marked relevant for a scenario appear in the top 5. This separates retrieval misses from generation misses. It doesn't apply to variants A and B.
+- **Reasoning (reviewed by Erik):** a hand review of a sample of explanations each run.
+- LLM output varies, so each scenario runs about 3 times per variant and scores are averaged.
+
+**Presentation:** publish a results table and a short write-up in the README. Any outcome is useful. If variant A matches C, that shows the knowledge base should focus on what Claude doesn't know (Erik's own patterns and local knowledge) rather than general bass-fishing advice.
 
 ## API Sketch
 - Auth: `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
@@ -136,32 +163,39 @@ CRUD endpoints for lures, limited to the current user.
 Scaffold the React app. Build the signup and login pages and the inventory screens, working end to end.
 - **Decide:** frontend tooling (Vite) and whether to use TypeScript. TypeScript is worth considering because it's widely expected in industry.
 - **Done when:** a new user can sign up, log in, and add, edit and delete lures in the browser against the real API.
-- **Check-in (Claude: ask Erik when this milestone is finished):** the current decision is to deploy only in Milestone 8, once the app is ready. Ask whether Erik still wants that, or would now rather do a basic deploy of auth and inventory to get a live link sooner.
+- **Check-in (Claude: ask Erik when this milestone is finished):** the current decision is to deploy only in Milestone 9, once the app is ready. Ask whether Erik still wants that, or would now rather do a basic deploy of auth and inventory to get a live link sooner.
 
 ### Milestone 4: Knowledge base and embeddings
-Erik drafts the knowledge base (50 to 150 entries) and Claude refines it. Build the embedding and seed pipeline with Voyage AI and pgvector.
+**First, write the eval scenarios** (see Evaluation), before any knowledge base entries, like writing tests before code, and set the held-out third aside. Then Erik writes stage 1 of the knowledge base (50 to 150 entries from Erik's own knowledge, with condition tags and source fields) and Claude refines it. Build the embedding and seed pipeline with Voyage AI and pgvector.
 - **Decide:** which Voyage embedding model to use. This sets the dimension of the `vector` column.
+- **Decide:** the exact condition tag columns on `knowledge_base_entries`. They should match the condition form's values so variant D can filter on them.
 - **Claude skill:** write the first custom skill here. A strong candidate: validating and adding knowledge base entries.
-- **Done when:** all entries are embedded and stored; a manual similarity query for a sample set of conditions returns entries that make sense; the seed script can be re-run safely.
+- **Done when:** the eval scenarios and the fixed test inventory are written, with the held-out set stored separately; all stage 1 entries are embedded and stored with tags and source fields; a manual similarity query for a sample set of conditions returns entries that make sense; the seed script can be re-run safely.
 
 ### Milestone 5: Recommendation pipeline
 Build retrieval and the Claude generation step, including checking the output against the inventory. Build the recommendation endpoints and save history (ADR: JSONB for history).
 - **Decide:** which Claude model to use, weighing cost against quality on this task. Compare a few real outputs before committing.
 - **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved; ratings work; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
 
-### Milestone 6: Frontend recommendations
+### Milestone 6: Evaluation
+Build the eval harness and run all four variants (see Evaluation). Erik hand-writes the scoring functions and the variant comparison; Claude can help with the runner and boilerplate.
+- **Decide:** where the harness lives in the repo and the format of the scenario files.
+- **Done when:** all four variants run on every scenario (about 3 runs each); picks and retrieval are scored by code; Erik has reviewed a sample of the reasoning; the final numbers come from the held-out set; a results table and short write-up are drafted for the README.
+- **Check-in (Claude: ask Erik when this milestone is finished):** based on the results, should stage 2 of the knowledge base (the larger expansion) happen before launch or after? Re-run the eval after the expansion either way.
+
+### Milestone 7: Frontend recommendations
 The conditions form, the results display, the history view and the "did it work?" rating.
 - **Done when:** the whole flow works in the browser, from entering conditions to seeing results to rating them later from history.
 
-### Milestone 7: Seeded lure catalog
+### Milestone 8: Seeded lure catalog
 Erik curates a data file (JSON or CSV) of 30 to 50 popular bass lures, storing facts only: brand, model, type, technique, sizes and color names. A seed script loads it into `catalog_lures`, and the add-lure screen gets catalog search. Roughly 3 to 5 hours, with no scraping.
 - **Done when:** the seed script can be re-run safely without creating duplicates; users can search the catalog and add a lure from it, or still add one by hand; catalog entries use the same fixed `type` and `technique` lists as `lures`.
 
-### Milestone 8: Deploy and polish
-Polish the UI, deploy to Render, Neon and Vercel, and write the README (including an architecture diagram and a note about the free tier's slow first request).
+### Milestone 9: Deploy and polish
+Polish the UI, deploy to Render, Neon and Vercel, and write the README (including an architecture diagram, the eval results table from Milestone 6, and a note about the free tier's slow first request).
 - **Done when:** the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
 
-### Milestone 9: Showcase
+### Milestone 10: Showcase
 Write a short demo write-up and consider a demo video for LinkedIn. Do a full mock-interview walkthrough of the codebase, and write the resume bullets (see `docs/CAREER_CONTEXT.md`).
 - **Done when:** Erik can give a 5-minute walkthrough of the app and a 15-minute deep dive into the architecture, and answer every question in the interview question bank.
 
