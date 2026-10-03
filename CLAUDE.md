@@ -52,6 +52,6 @@ Follow a professional team workflow, even when working solo.
 
 ## Conventions
 - Keep `docs/PROJECT_PLAN.md` in sync when decisions are made or scope changes.
-- Record significant decisions as ADRs in `docs/decisions/`.
+- Record significant decisions as ADRs in `docs/decisions/`: ones that are hard to reverse, affect several parts of the system, or that an interviewer would ask about. Start from `0000-template.md` and keep each to one page (about 400 words).
 - Career and resume context is in `docs/CAREER_CONTEXT.md`. It isn't needed for coding tasks.
 - `docs/INTERVIEW_PREP.md` is Erik's private question bank. It may not exist in a fresh clone. When a feature is finished, suggest new questions for it.
