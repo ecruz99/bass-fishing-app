@@ -36,6 +36,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - **Plan before big changes:** use plan mode for anything that touches more than one or two files, and read the plan critically before approving it.
 - **Review every diff:** read each change before accepting it. If Claude's reasoning isn't clear, ask why before accepting.
 - **Know how to recover:** commit before each Claude session so there's a clean point to go back to. Interrupt with Esc when it's heading the wrong way, use `/rewind` to undo, and correct it explicitly ("don't do X, do Y because Z") instead of re-rolling the same prompt.
+- **Use hooks for rules that must always happen:** CLAUDE.md is guidance Claude usually follows; a hook is a command Claude Code always runs. Start with the `ruff format` hook in Milestone 1, and add others when a rule keeps getting missed.
 - **Log the misfires:** keep brief notes in `docs/CLAUDE_LESSONS.md` on times Claude went wrong: what happened, how Erik caught it, and what fixed it. This also makes a good interview story about using AI tools responsibly.
 
 ## Decisions
@@ -77,6 +78,13 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - **Charts and flow charts are transcribed into text entries**, tagged with the conditions they apply to (for example season, clarity, water temperature range). The tags also power eval variant D. Images are not embedded directly.
 - **External sources follow the catalog's facts-only rule:** restate facts in Erik's own words, never copy text or images, and record each entry's source type (personal or external), source name and URL.
 - **Conflicting advice:** keep both entries, tagged with their source. The prompt tells Claude to prefer Erik's personal entries when they conflict. Only exact duplicates are merged.
+
+**Development tooling and CI:**
+- **Python tooling:** `uv` for dependencies (a lockfile means CI and local installs match exactly), `ruff` for linting and formatting, and `mypy` for type checking (non-strict to start, tightened later).
+- **CI:** a GitHub Actions workflow runs on every pull request: `ruff` lint and format check, `mypy` and `pytest`. A Postgres + pgvector service container lets repository and integration tests run alongside the service unit tests. Frontend lint, type check and build get added in Milestone 3.
+- **Branch protection on `main`:** require a pull request and passing CI before merging, with no bypass for admins. That makes "tests must pass" and "never push to `main`" rules GitHub enforces, not just promises.
+- **Local database:** docker-compose runs only Postgres + pgvector (the `pgvector/pgvector` image, matching Neon's Postgres major version). The API runs directly with `uv` for fast reloads and easy debugging, so no Dockerfile is needed; Render deploys Python natively.
+- **Formatting hooks:** a Claude Code hook in `.claude/settings.json` runs `ruff format` whenever Claude edits a Python file, and a pre-commit git hook runs `ruff` on every commit, so Erik's commits are covered too. CI is the final check.
 
 **Hosting:**
 - Backend: Render (free tier sleeps when idle, so the first request is slow. That's acceptable for a portfolio app; note it in the README.)
@@ -177,7 +185,7 @@ Every milestone also includes:
 - From Milestone 1 on, the merged work is live: check the deployed app, not just the local one
 
 ### Milestone 1: Backend foundation and auth
-Set up the repo structure, the layered backend skeleton, Alembic, and a local Postgres with pgvector. Hand-write signup, login and the JWT dependency. Deploy the backend to Render and Neon as a walking skeleton.
+Set up the repo structure, the layered backend skeleton, Alembic, and the development tooling: `uv`, `ruff`, `mypy`, docker-compose for local Postgres with pgvector, the CI workflow, branch protection, and the Claude Code and pre-commit formatting hooks. Hand-write signup, login and the JWT dependency. Deploy the backend to Render and Neon as a walking skeleton.
 - **Decide:** where the frontend stores tokens (in memory with an `Authorization` header, or an httpOnly cookie). Look up the XSS/CSRF tradeoff and write an ADR.
 - **Write ADRs:** stack, RAG vs. a trained model, hand-written auth.
 - **Auth, hand-written in single-function steps** (Erik writes each one; Claude explains, points to docs and reviews):
@@ -189,7 +197,7 @@ Set up the repo structure, the layered backend skeleton, Alembic, and a local Po
   6. The login endpoint
 - **Check-in (Claude: ask Erik after auth steps 1 and 2):** is the step-by-step approach working? If yes, continue through step 6. If it feels like no progress is being made, switch to the fallback in Growth Goal 1: Claude writes the rest of auth, Erik learns it until it can be explained line by line, then writes the "change password" endpoint alone.
 - **Deploy:** a `/health` endpoint; the backend on Render and the database on Neon (with pgvector enabled); migrations run as part of each deploy; auto-deploy on merge to `main`; secrets only in Render's environment variables. Check Render's terms of service, then set up the keep-warm ping.
-- **Done when:** a user can sign up, log in and call a protected endpoint, **on the live API**; migrations run cleanly from an empty database, locally and on Neon; merging to `main` deploys automatically; the auth logic has pytest tests.
+- **Done when:** a user can sign up, log in and call a protected endpoint, **on the live API**; migrations run cleanly from an empty database, locally and on Neon; merging to `main` deploys automatically; the auth logic has pytest tests; `docker compose up` gives a fresh clone a working local database; CI runs on every PR, and `main` can't be merged into while CI fails.
 
 ### Milestone 2: Lure inventory API
 CRUD endpoints for lures, limited to the current user.
@@ -198,7 +206,7 @@ CRUD endpoints for lures, limited to the current user.
 - **Done when:** all lure endpoints work with validation (including length limits on `name` and `notes`), pagination and consistent errors; one user can never read or change another user's lures (with a test that proves it); service-layer tests pass.
 
 ### Milestone 3: Frontend inventory
-Scaffold the React app. Build the signup and login pages and the inventory screens, working end to end. Deploy the frontend to Vercel, with auto-deploy on merge, and add the wake-up screen for the cold start.
+Scaffold the React app. Build the signup and login pages and the inventory screens, working end to end. Deploy the frontend to Vercel, with auto-deploy on merge, and add the wake-up screen for the cold start. Add frontend lint, type check and build to CI.
 - **Decide:** frontend tooling (Vite) and whether to use TypeScript. TypeScript is worth considering because it's widely expected in industry.
 - **Done when:** a new user can sign up, log in, and add, edit and delete lures **on the live site** against the live API; the wake-up screen shows while the backend is waking.
 
