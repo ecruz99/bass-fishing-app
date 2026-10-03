@@ -83,6 +83,18 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - Database: Neon Postgres (free tier, supports pgvector)
 - Frontend: Vercel
 
+**Deployment:** deploy early as a walking skeleton, not at the end. The backend goes live at the end of Milestone 1 and the frontend in Milestone 3. After that, Render and Vercel redeploy automatically whenever a PR merges to `main`. This surfaces production problems (CORS, environment variables, migrations on Neon, enabling pgvector) one at a time while they're small, and there's always a live link to share.
+
+**Cold start:** Render's free tier sleeps after about 15 minutes idle and can take up to a minute to wake.
+- **Wake-up screen:** the static Vercel frontend loads instantly, pings the API on page load, and shows a friendly "waking up the server" message until it answers.
+- **Keep-warm ping:** a scheduled job calls `/health` every 10 to 14 minutes. Check Render's terms of service before relying on it.
+- Neon also suspends when idle, but it wakes in well under a second, so it needs no special handling.
+
+**Demo experience:** a recruiter should see the app working within seconds, without signing up.
+- **Shared demo account, reset nightly:** a "Try the demo" button logs into one demo user with a realistic inventory and past recommendations (with ratings, so the history view isn't empty). A scheduled job restores the demo data every night. Visitors may briefly see each other's changes; that's accepted for simplicity.
+- **The demo's recommendation limit is shared** by every visitor, so one visitor could use it up for the day. Set the limit and how it's enforced in issue #10 (cost and abuse safeguards).
+- **Landing page sample:** one real recommendation, pre-computed, saved as JSON and labeled as real output. It's free, appears instantly, and still works while the backend is asleep.
+
 ## Database Schema (finalize column types in Milestone 1)
 - `users`: id, email (unique), hashed_password, created_at
 - `lures`: id, user_id (FK → users), catalog_lure_id (nullable FK → catalog_lures; null for lures the user added by hand), name, type, brand, color, size, technique, quantity (default 1), notes, created_at, updated_at
@@ -138,9 +150,10 @@ Every milestone also includes:
 - A walkthrough note in `docs/walkthroughs/` for any new flow
 - New entries in the interview question bank
 - Passing the explain-back rule: Erik can explain everything built in that milestone without looking at the code
+- From Milestone 1 on, the merged work is live: check the deployed app, not just the local one
 
 ### Milestone 1: Backend foundation and auth
-Set up the repo structure, the layered backend skeleton, Alembic, and a local Postgres with pgvector. Hand-write signup, login and the JWT dependency.
+Set up the repo structure, the layered backend skeleton, Alembic, and a local Postgres with pgvector. Hand-write signup, login and the JWT dependency. Deploy the backend to Render and Neon as a walking skeleton.
 - **Decide:** where the frontend stores tokens (in memory with an `Authorization` header, or an httpOnly cookie). Look up the XSS/CSRF tradeoff and write an ADR.
 - **Write ADRs:** stack, RAG vs. a trained model, hand-written auth.
 - **Auth, hand-written in single-function steps** (Erik writes each one; Claude explains, points to docs and reviews):
@@ -151,7 +164,8 @@ Set up the repo structure, the layered backend skeleton, Alembic, and a local Po
   5. The signup endpoint
   6. The login endpoint
 - **Check-in (Claude: ask Erik after auth steps 1 and 2):** is the step-by-step approach working? If yes, continue through step 6. If it feels like no progress is being made, switch to the fallback in Growth Goal 1: Claude writes the rest of auth, Erik learns it until it can be explained line by line, then writes the "change password" endpoint alone.
-- **Done when:** a user can sign up, log in and call a protected endpoint; migrations run cleanly from an empty database; the auth logic has pytest tests.
+- **Deploy:** a `/health` endpoint; the backend on Render and the database on Neon (with pgvector enabled); migrations run as part of each deploy; auto-deploy on merge to `main`; secrets only in Render's environment variables. Check Render's terms of service, then set up the keep-warm ping.
+- **Done when:** a user can sign up, log in and call a protected endpoint, **on the live API**; migrations run cleanly from an empty database, locally and on Neon; merging to `main` deploys automatically; the auth logic has pytest tests.
 
 ### Milestone 2: Lure inventory API
 CRUD endpoints for lures, limited to the current user.
@@ -160,10 +174,9 @@ CRUD endpoints for lures, limited to the current user.
 - **Done when:** all lure endpoints work with validation, pagination and consistent errors; one user can never read or change another user's lures (with a test that proves it); service-layer tests pass.
 
 ### Milestone 3: Frontend inventory
-Scaffold the React app. Build the signup and login pages and the inventory screens, working end to end.
+Scaffold the React app. Build the signup and login pages and the inventory screens, working end to end. Deploy the frontend to Vercel, with auto-deploy on merge, and add the wake-up screen for the cold start.
 - **Decide:** frontend tooling (Vite) and whether to use TypeScript. TypeScript is worth considering because it's widely expected in industry.
-- **Done when:** a new user can sign up, log in, and add, edit and delete lures in the browser against the real API.
-- **Check-in (Claude: ask Erik when this milestone is finished):** the current decision is to deploy only in Milestone 9, once the app is ready. Ask whether Erik still wants that, or would now rather do a basic deploy of auth and inventory to get a live link sooner.
+- **Done when:** a new user can sign up, log in, and add, edit and delete lures **on the live site** against the live API; the wake-up screen shows while the backend is waking.
 
 ### Milestone 4: Knowledge base and embeddings
 **First, write the eval scenarios** (see Evaluation), before any knowledge base entries, like writing tests before code, and set the held-out third aside. Then Erik writes stage 1 of the knowledge base (50 to 150 entries from Erik's own knowledge, with condition tags and source fields) and Claude refines it. Build the embedding and seed pipeline with Voyage AI and pgvector.
@@ -191,9 +204,10 @@ The conditions form, the results display, the history view and the "did it work?
 Erik curates a data file (JSON or CSV) of 30 to 50 popular bass lures, storing facts only: brand, model, type, technique, sizes and color names. A seed script loads it into `catalog_lures`, and the add-lure screen gets catalog search. Roughly 3 to 5 hours, with no scraping.
 - **Done when:** the seed script can be re-run safely without creating duplicates; users can search the catalog and add a lure from it, or still add one by hand; catalog entries use the same fixed `type` and `technique` lists as `lures`.
 
-### Milestone 9: Deploy and polish
-Polish the UI, deploy to Render, Neon and Vercel, and write the README (including an architecture diagram, the eval results table from Milestone 6, and a note about the free tier's slow first request).
-- **Done when:** the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
+### Milestone 9: Demo and polish
+The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus past recommendations with ratings) and its nightly reset, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, and a note about the free tier's slow first request).
+- **Decide:** how the nightly reset runs (for example a scheduled GitHub Actions workflow, which could also run the keep-warm ping).
+- **Done when:** a first-time visitor sees a real recommendation within 10 seconds of opening the URL, without signing up; the demo data resets every night; the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
 
 ### Milestone 10: Showcase
 Write a short demo write-up and consider a demo video for LinkedIn. Do a full mock-interview walkthrough of the codebase, and write the resume bullets (see `docs/CAREER_CONTEXT.md`).
