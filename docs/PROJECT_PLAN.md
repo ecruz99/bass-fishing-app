@@ -85,6 +85,15 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - **External sources follow the catalog's facts-only rule:** restate facts in Erik's own words, never copy text or images, and record each entry's source type (personal or external), source name and URL.
 - **Conflicting advice:** keep both entries, tagged with their source. The prompt tells Claude to prefer Erik's personal entries when they conflict. Only exact duplicates are merged.
 
+**Showing the reasoning:** a reviewer who doesn't fish can't judge whether a recommendation is good, but they can judge visible, traceable reasoning.
+- **Per-lure citations:** each pick in Claude's structured output includes `cited_entry_ids`. The service drops any citation that wasn't in the entries retrieved for this request. It's the same guardrail as checking lure ownership, and it catches Claude citing something it never saw.
+- **On each recommended lure:** the reasoning plus "Based on" chips with the cited entries' titles.
+- **Source labels:** "From Erik's notes" for personal entries, or the source name with a link for external ones.
+- **"What the AI looked at":** a collapsible panel, hidden by default, listing the titles of all retrieved entries with their similarity scores, including the ones Claude didn't cite.
+- **Titles only, never entry content:** the knowledge base stays private. This is enforced in the API response schema (titles, sources and scores only), not just hidden in the UI; otherwise anyone could read the content in the browser's dev tools.
+- **Titles must stand on their own,** since they're all a reviewer sees. For example "Stained water, early spring: slow-rolled spinnerbait," not "Spring tip #3."
+- **History stays correct:** each entry has a stable `slug` so re-seeding never changes IDs, and the cited entries' titles and sources are snapshotted into the stored result.
+
 **Development tooling and CI:**
 - **Python tooling:** `uv` for dependencies (a lockfile means CI and local installs match exactly), `ruff` for linting and formatting, and `mypy` for type checking (non-strict to start, tightened later).
 - **CI:** a GitHub Actions workflow runs on every pull request: `ruff` lint and format check, `mypy` and `pytest`. A Postgres + pgvector service container lets repository and integration tests run alongside the service unit tests. Frontend lint, type check and build get added in Milestone 3.
@@ -136,8 +145,8 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - `users`: id, email (unique), hashed_password, token_version (integer, default 0; incremented to invalidate all of the user's tokens), created_at
 - `lures`: id, user_id (FK → users), catalog_lure_id (nullable FK → catalog_lures; null for lures the user added by hand), name, type, brand, color, size, technique, quantity (default 1), notes, created_at, updated_at
 - `catalog_lures`: id, brand, model, type, technique, sizes (text[]), colors (text[]), source_name (`seed` for hand-seeded entries), source_url (nullable), last_scraped_at (nullable; set by the v2 scraper), created_at. Shared by all users; unique on (brand, model). `type` and `technique` use the same fixed lists as `lures`.
-- `knowledge_base_entries`: id, title, content (text), category (e.g. clarity, season, structure, weather), condition tags (for example season, clarity, water temperature range; exact columns decided in Milestone 4), source_type (`personal` or `external`), source_name, source_url (nullable), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
-- `recommendations`: id, user_id (FK → users), conditions (JSONB), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning, saved as a snapshot so the history still reads correctly if a lure is later deleted), worked (nullable boolean: the "did it work?" rating), model, input_tokens, output_tokens, cost_usd, embedding_ms, retrieval_ms, generation_ms, invalid_ids_dropped, created_at
+- `knowledge_base_entries`: id, slug (unique, stable; the seed script upserts by it), title, content (text), category (e.g. clarity, season, structure, weather), condition tags (for example season, clarity, water temperature range; exact columns decided in Milestone 4), source_type (`personal` or `external`), source_name, source_url (nullable), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
+- `recommendations`: id, user_id (FK → users), conditions (JSONB), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning and cited entries (titles and sources), saved as a snapshot so the history still reads correctly if a lure is later deleted or an entry changes), worked (nullable boolean: the "did it work?" rating), model, input_tokens, output_tokens, cost_usd, embedding_ms, retrieval_ms, generation_ms, invalid_ids_dropped, created_at
 
 Why JSONB for conditions and results: the set of conditions will probably change while the project is being built, and history rows are only ever read as a whole, never filtered by individual fields. If filtering by field becomes necessary later, move those fields into real columns with a migration.
 
@@ -148,7 +157,7 @@ Why JSONB for conditions and results: the set of conditions will probably change
 4. The query is embedded with Voyage AI.
 5. pgvector returns the top-k most similar knowledge base entries by cosine distance (start with k=5 and tune it).
 6. The prompt sent to Claude contains the conditions, the retrieved entries and the user's lure inventory (wrapped in delimiters and marked as data), with instructions to recommend **only** lures from that inventory, to explain why each one fits, and to prefer Erik's personal entries when retrieved entries conflict.
-7. Claude returns structured output (lure IDs plus reasoning), validated with Pydantic. The service checks that every returned ID belongs to the user's inventory and drops any that don't, so the model can't recommend a lure the user doesn't own. Failures are handled as described in LLM failure handling.
+7. Claude returns structured output (lure IDs, reasoning and cited entry IDs for each pick), validated with Pydantic. The service checks that every returned lure ID belongs to the user's inventory and drops any that don't, so the model can't recommend a lure the user doesn't own. It also drops any citation that wasn't among the retrieved entries. Failures are handled as described in LLM failure handling.
 8. The service saves a `recommendations` row, including its cost, token and latency metrics, and returns the result.
 9. Later, the user can rate it with `PATCH /api/v1/recommendations/{id}` (`worked: true/false`).
 
@@ -168,6 +177,7 @@ An eval harness measures whether the knowledge base and retrieval actually impro
 **Scoring:**
 - **Picks (scored by code):** the share of recommended lures whose type is in the scenario's good list, the share in its bad list, and any invalid IDs. This works because Claude returns structured output (lure IDs) and every lure has a `type`.
 - **Retrieval (scored by code):** recall@5, meaning how many of the entries Erik marked relevant for a scenario appear in the top 5. This separates retrieval misses from generation misses. It doesn't apply to variants A and B.
+- **Citation accuracy (scored by code):** the share of cited entries that Erik marked relevant for the scenario. It reuses the recall@5 labels, so it needs no extra labeling. It applies to variants B, C and D.
 - **Reasoning (reviewed by Erik):** a hand review of a sample of explanations each run.
 - LLM output varies, so each scenario runs about 3 times per variant and scores are averaged.
 
@@ -225,24 +235,24 @@ Scaffold the React app. Build the signup and login pages and the inventory scree
 - **Set up:** a spend limit on the Voyage account when creating its API key.
 - **Decide:** the exact condition tag columns on `knowledge_base_entries`. They should match the condition form's values so variant D can filter on them.
 - **Claude skill:** write the first custom skill here. A strong candidate: validating and adding knowledge base entries.
-- **Done when:** the eval scenarios and the fixed test inventory are written, with the held-out set stored separately; all stage 1 entries are embedded and stored with tags and source fields; a manual similarity query for a sample set of conditions returns entries that make sense; the seed script can be re-run safely.
+- **Done when:** the eval scenarios and the fixed test inventory are written, with the held-out set stored separately; all stage 1 entries are embedded and stored with tags and source fields; a manual similarity query for a sample set of conditions returns entries that make sense; the seed script can be re-run safely and upserts by `slug`, so entry IDs never change.
 
 ### Milestone 5: Recommendation pipeline
-Build retrieval and the Claude generation step, including checking the output against the inventory. Build the recommendation endpoints and save history (ADR: JSONB for history).
+Build retrieval and the Claude generation step, including checking the output against the inventory and validating citations against the retrieved entries. Build the recommendation endpoints and save history (ADR: JSONB for history).
 Add the safeguards from Decisions: the per-user quota, per-IP rate limiting on recommendations, LLM failure handling, the cost and latency metrics, and the prompt injection mitigations.
 - **Decide:** which Claude model to use, weighing cost against quality on this task. Compare a few real outputs before committing.
 - **Set up:** a spend limit in the Anthropic Console when creating the Claude API key.
-- **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics; ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
+- **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics; responses include entry titles, sources and scores but never entry content (with a test); ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
 
 ### Milestone 6: Evaluation
 Build the eval harness and run all four variants (see Evaluation). Erik hand-writes the scoring functions and the variant comparison; Claude can help with the runner and boilerplate.
 - **Decide:** where the harness lives in the repo and the format of the scenario files.
-- **Done when:** all four variants run on every scenario (about 3 runs each); picks and retrieval are scored by code; Erik has reviewed a sample of the reasoning; the final numbers come from the held-out set; a results table and short write-up are drafted for the README.
+- **Done when:** all four variants run on every scenario (about 3 runs each); picks, retrieval and citation accuracy are scored by code; Erik has reviewed a sample of the reasoning; the final numbers come from the held-out set; a results table and short write-up are drafted for the README.
 - **Check-in (Claude: ask Erik when this milestone is finished):** based on the results, should stage 2 of the knowledge base (the larger expansion) happen before launch or after? Re-run the eval after the expansion either way.
 
 ### Milestone 7: Frontend recommendations
-The conditions form, the results display, the history view and the "did it work?" rating.
-- **Done when:** the whole flow works in the browser, from entering conditions to seeing results to rating them later from history.
+The conditions form, the results display (with citation chips, source labels and the "What the AI looked at" panel), the history view and the "did it work?" rating.
+- **Done when:** the whole flow works in the browser, from entering conditions to seeing results to rating them later from history; every recommended lure shows the entries it's based on, and history still shows them correctly after an entry is edited.
 
 ### Milestone 8: Seeded lure catalog
 Erik curates a data file (JSON or CSV) of 30 to 50 popular bass lures, storing facts only: brand, model, type, technique, sizes and color names. A seed script loads it into `catalog_lures`, and the add-lure screen gets catalog search. Roughly 3 to 5 hours, with no scraping.
