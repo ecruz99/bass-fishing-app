@@ -92,27 +92,51 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **Demo experience:** a recruiter should see the app working within seconds, without signing up.
 - **Shared demo account, reset nightly:** a "Try the demo" button logs into one demo user with a realistic inventory and past recommendations (with ratings, so the history view isn't empty). A scheduled job restores the demo data every night. Visitors may briefly see each other's changes; that's accepted for simplicity.
-- **The demo's recommendation limit is shared** by every visitor, so one visitor could use it up for the day. Set the limit and how it's enforced in issue #10 (cost and abuse safeguards).
+- **Demo recommendation limits:** every visitor shares the demo account, so a per-user quota would let one visitor use it up. Instead: 3 recommendations per visitor IP per day, plus 50 per day in total (a count of the demo user's `recommendations` rows). When either limit is hit, show the landing page sample and "Demo limit reached, sign up to keep going," so the limit never produces a broken page.
+- **Demo free text is locked:** demo visitors can add lures (by picking from the catalog, so the name comes from the catalog), delete them and change structured fields like quantity, but can't edit `name` or `notes`. This stops one visitor from planting prompt injection text that every other visitor would see until the nightly reset.
 - **Landing page sample:** one real recommendation, pre-computed, saved as JSON and labeled as real output. It's free, appears instantly, and still works while the backend is asleep.
+
+**Cost and abuse safeguards:** signup is free and every recommendation calls paid APIs, so several cheap layers each catch what the others miss.
+- **Provider spend limits:** set in each provider's console when its key is created. The backstop: if everything else fails, the feature stops instead of running up a bill.
+- **Per-user daily quota:** 20 recommendations per day to start. It's a count of the user's `recommendations` rows created today, so no extra table is needed, and failed calls never count because they don't save a row.
+- **Per-IP rate limiting** with `slowapi` on signup and recommendations (login is decided in issue #12). Its counters live in memory and reset when Render restarts, which is acceptable at this scale.
+- **No CAPTCHA:** it adds friction for recruiters, and the layers above already cover bot signups.
+- All the numbers are starting defaults. Tune them once Milestone 5 logs real costs per call.
+
+**LLM failure handling:**
+- **Slow or no response:** an explicit timeout. The Anthropic SDK already retries transient errors (rate limits, 5xx, dropped connections) with backoff, so there's no hand-rolled retry loop.
+- **Malformed output:** the output schema is enforced with tool use or structured outputs and validated with Pydantic. Retry once, then return an error.
+- **IDs the user doesn't own:** drop them and log them. If no valid picks remain, retry once, then show a clear "no recommendation" message.
+- **Provider down or spend limit reached:** a 503 in the standard error shape and a friendly "temporarily unavailable" message. The demo falls back to the landing page sample.
+- **Empty inventory:** return a clear message without calling Voyage or Claude.
+
+**Observability:** each saved recommendation records the model, input and output tokens, the computed cost, latency for each stage (embedding, retrieval, generation) and how many invalid IDs were dropped. Failures don't save a row, so they're written to structured JSON logs (visible in Render). The stored numbers feed the README ("each recommendation costs about $X and takes Y seconds") and the in-app analytics in issue #16.
+
+**Prompt injection:** lure `name` and `notes` are user text that goes into the prompt. Mitigations:
+- User data is wrapped in clear delimiters (for example XML tags), and the prompt tells Claude to treat it as data, not instructions.
+- `name` and `notes` have length limits, enforced by Pydantic validation.
+- Structured output and ID validation limit what an attack can achieve. The reasoning text is the remaining exposure; React escapes displayed text, so it isn't an XSS risk.
+- On a normal account an injection only affects that user's own results. The remaining risk is documented in the README.
 
 ## Database Schema (finalize column types in Milestone 1)
 - `users`: id, email (unique), hashed_password, created_at
 - `lures`: id, user_id (FK → users), catalog_lure_id (nullable FK → catalog_lures; null for lures the user added by hand), name, type, brand, color, size, technique, quantity (default 1), notes, created_at, updated_at
 - `catalog_lures`: id, brand, model, type, technique, sizes (text[]), colors (text[]), source_name (`seed` for hand-seeded entries), source_url (nullable), last_scraped_at (nullable; set by the v2 scraper), created_at. Shared by all users; unique on (brand, model). `type` and `technique` use the same fixed lists as `lures`.
 - `knowledge_base_entries`: id, title, content (text), category (e.g. clarity, season, structure, weather), condition tags (for example season, clarity, water temperature range; exact columns decided in Milestone 4), source_type (`personal` or `external`), source_name, source_url (nullable), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
-- `recommendations`: id, user_id (FK → users), conditions (JSONB), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning, saved as a snapshot so the history still reads correctly if a lure is later deleted), worked (nullable boolean: the "did it work?" rating), created_at
+- `recommendations`: id, user_id (FK → users), conditions (JSONB), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning, saved as a snapshot so the history still reads correctly if a lure is later deleted), worked (nullable boolean: the "did it work?" rating), model, input_tokens, output_tokens, cost_usd, embedding_ms, retrieval_ms, generation_ms, invalid_ids_dropped, created_at
 
 Why JSONB for conditions and results: the set of conditions will probably change while the project is being built, and history rows are only ever read as a whole, never filtered by individual fields. If filtering by field becomes necessary later, move those fields into real columns with a migration.
 
 ## Recommendation Pipeline
 1. The user submits the conditions form, and the request goes to `POST /api/v1/recommendations`.
-2. The service builds a text query from the conditions (for example "stained water, early spring, 52°F water, windy, falling pressure, overcast").
-3. The query is embedded with Voyage AI.
-4. pgvector returns the top-k most similar knowledge base entries by cosine distance (start with k=5 and tune it).
-5. The prompt sent to Claude contains the conditions, the retrieved entries and the user's lure inventory, with instructions to recommend **only** lures from that inventory, to explain why each one fits, and to prefer Erik's personal entries when retrieved entries conflict.
-6. Claude returns structured output (lure IDs plus reasoning). The service checks that every returned ID belongs to the user's inventory, so the model can't recommend a lure the user doesn't own.
-7. The service saves a `recommendations` row and returns the result.
-8. Later, the user can rate it with `PATCH /api/v1/recommendations/{id}` (`worked: true/false`).
+2. The service checks the per-IP rate limit and the user's daily quota (or the demo limits), and returns early with a clear message if the inventory is empty. All of this happens before any paid API call.
+3. The service builds a text query from the conditions (for example "stained water, early spring, 52°F water, windy, falling pressure, overcast").
+4. The query is embedded with Voyage AI.
+5. pgvector returns the top-k most similar knowledge base entries by cosine distance (start with k=5 and tune it).
+6. The prompt sent to Claude contains the conditions, the retrieved entries and the user's lure inventory (wrapped in delimiters and marked as data), with instructions to recommend **only** lures from that inventory, to explain why each one fits, and to prefer Erik's personal entries when retrieved entries conflict.
+7. Claude returns structured output (lure IDs plus reasoning), validated with Pydantic. The service checks that every returned ID belongs to the user's inventory and drops any that don't, so the model can't recommend a lure the user doesn't own. Failures are handled as described in LLM failure handling.
+8. The service saves a `recommendations` row, including its cost, token and latency metrics, and returns the result.
+9. Later, the user can rate it with `PATCH /api/v1/recommendations/{id}` (`worked: true/false`).
 
 ## Evaluation
 An eval harness measures whether the knowledge base and retrieval actually improve recommendations. Without it there's no answer to "why retrieve at all?" or "does the knowledge base beat Claude's own knowledge?" (ADR 0001).
@@ -171,7 +195,7 @@ Set up the repo structure, the layered backend skeleton, Alembic, and a local Po
 CRUD endpoints for lures, limited to the current user.
 - **Decide:** should `type` and `technique` be fixed lists (enums or lookup tables) or free text? Recommendation: fixed lists. Consistent values make it much easier for the LLM to match lures to knowledge base entries, while free text like "crank" vs. "crankbait" gets messy.
 - **Decide (ADR):** when a lure is linked to the catalog, should its attributes be copied onto the user's row (simple, and users can edit them) or read through the link (no duplication, but harder to customize)? Include the nullable `catalog_lure_id` column either way.
-- **Done when:** all lure endpoints work with validation, pagination and consistent errors; one user can never read or change another user's lures (with a test that proves it); service-layer tests pass.
+- **Done when:** all lure endpoints work with validation (including length limits on `name` and `notes`), pagination and consistent errors; one user can never read or change another user's lures (with a test that proves it); service-layer tests pass.
 
 ### Milestone 3: Frontend inventory
 Scaffold the React app. Build the signup and login pages and the inventory screens, working end to end. Deploy the frontend to Vercel, with auto-deploy on merge, and add the wake-up screen for the cold start.
@@ -181,14 +205,17 @@ Scaffold the React app. Build the signup and login pages and the inventory scree
 ### Milestone 4: Knowledge base and embeddings
 **First, write the eval scenarios** (see Evaluation), before any knowledge base entries, like writing tests before code, and set the held-out third aside. Then Erik writes stage 1 of the knowledge base (50 to 150 entries from Erik's own knowledge, with condition tags and source fields) and Claude refines it. Build the embedding and seed pipeline with Voyage AI and pgvector.
 - **Decide:** which Voyage embedding model to use. This sets the dimension of the `vector` column.
+- **Set up:** a spend limit on the Voyage account when creating its API key.
 - **Decide:** the exact condition tag columns on `knowledge_base_entries`. They should match the condition form's values so variant D can filter on them.
 - **Claude skill:** write the first custom skill here. A strong candidate: validating and adding knowledge base entries.
 - **Done when:** the eval scenarios and the fixed test inventory are written, with the held-out set stored separately; all stage 1 entries are embedded and stored with tags and source fields; a manual similarity query for a sample set of conditions returns entries that make sense; the seed script can be re-run safely.
 
 ### Milestone 5: Recommendation pipeline
 Build retrieval and the Claude generation step, including checking the output against the inventory. Build the recommendation endpoints and save history (ADR: JSONB for history).
+Add the safeguards from Decisions: the per-user quota, per-IP rate limiting on signup and recommendations, LLM failure handling, the cost and latency metrics, and the prompt injection mitigations.
 - **Decide:** which Claude model to use, weighing cost against quality on this task. Compare a few real outputs before committing.
-- **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved; ratings work; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
+- **Set up:** a spend limit in the Anthropic Console when creating the Claude API key.
+- **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics; ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
 
 ### Milestone 6: Evaluation
 Build the eval harness and run all four variants (see Evaluation). Erik hand-writes the scoring functions and the variant comparison; Claude can help with the runner and boilerplate.
@@ -205,9 +232,9 @@ Erik curates a data file (JSON or CSV) of 30 to 50 popular bass lures, storing f
 - **Done when:** the seed script can be re-run safely without creating duplicates; users can search the catalog and add a lure from it, or still add one by hand; catalog entries use the same fixed `type` and `technique` lists as `lures`.
 
 ### Milestone 9: Demo and polish
-The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus past recommendations with ratings) and its nightly reset, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, and a note about the free tier's slow first request).
+The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus past recommendations with ratings), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, and a note about the free tier's slow first request).
 - **Decide:** how the nightly reset runs (for example a scheduled GitHub Actions workflow, which could also run the keep-warm ping).
-- **Done when:** a first-time visitor sees a real recommendation within 10 seconds of opening the URL, without signing up; the demo data resets every night; the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
+- **Done when:** a first-time visitor sees a real recommendation within 10 seconds of opening the URL, without signing up; the demo data resets every night; the demo limits fall back to the landing page sample; demo visitors can't edit `name` or `notes`; the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
 
 ### Milestone 10: Showcase
 Write a short demo write-up and consider a demo video for LinkedIn. Do a full mock-interview walkthrough of the codebase, and write the resume bullets (see `docs/CAREER_CONTEXT.md`).
