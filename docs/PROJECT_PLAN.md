@@ -56,7 +56,13 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **AI providers:** Claude (Anthropic API) generates the recommendations. Voyage AI creates the embeddings; Anthropic recommends it, since Anthropic has no embeddings API of its own. That means two API keys, both kept in environment variables and never committed.
 
-**Auth:** Written by hand with JWT in FastAPI: password hashing (argon2 or bcrypt via `pwdlib`, the library the current FastAPI docs use), short-lived access tokens, and a `get_current_user` dependency. Chosen over FastAPI-Users or a hosted service because Erik should understand and be able to explain every line, and a mobile client could reuse it.
+**Auth:** Written by hand with JWT in FastAPI: password hashing (Argon2 via `pwdlib`, the library the current FastAPI docs use), short-lived access tokens, and a `get_current_user` dependency. Chosen over FastAPI-Users or a hosted service because Erik should understand and be able to explain every line, and a mobile client could reuse it.
+- **Revocation through a token version:** `users.token_version` (an integer) is included in every JWT, and `get_current_user` rejects tokens whose version doesn't match. Incrementing it invalidates every token the user holds. `get_current_user` already loads the user from the database, so the check costs nothing extra. Regular logout just discards the token on the client.
+- **Change password** (while logged in) increments `token_version`, which logs out the user's other sessions. **Log out everywhere** increments it directly.
+- **Login rate limiting:** `slowapi` limits per IP and per email (for example 5 attempts per minute), from Milestone 1. No account lockout, because lockout lets an attacker lock real users out by failing on purpose.
+- **Error messages:** login says "invalid email or password" without revealing which was wrong. Signup does reveal "email already registered"; that's an accepted tradeoff for usability.
+- **Out of scope for launch:** refresh tokens, password reset and email verification (reset and verification need an email provider). All three are stretch goals, and the README lists them as deliberate gaps.
+- **How to describe it:** "Implemented JWT authentication from scratch with PyJWT and pwdlib (Argon2): no auth framework, and no hand-written cryptography." Avoid "hand-written auth," which can sound like rolling your own crypto.
 
 **Condition input:** Manual form entry for the MVP. Auto-filling from Open-Meteo (free, no API key) using the user's location is a stretch goal. It shouldn't hold up the core RAG pipeline.
 
@@ -107,7 +113,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 **Cost and abuse safeguards:** signup is free and every recommendation calls paid APIs, so several cheap layers each catch what the others miss.
 - **Provider spend limits:** set in each provider's console when its key is created. The backstop: if everything else fails, the feature stops instead of running up a bill.
 - **Per-user daily quota:** 20 recommendations per day to start. It's a count of the user's `recommendations` rows created today, so no extra table is needed, and failed calls never count because they don't save a row.
-- **Per-IP rate limiting** with `slowapi` on signup and recommendations (login is decided in issue #12). Its counters live in memory and reset when Render restarts, which is acceptable at this scale.
+- **Per-IP rate limiting** with `slowapi` on signup and login (from Milestone 1, when auth goes live) and on recommendations (Milestone 5). Its counters live in memory and reset when Render restarts, which is acceptable at this scale.
 - **No CAPTCHA:** it adds friction for recruiters, and the layers above already cover bot signups.
 - All the numbers are starting defaults. Tune them once Milestone 5 logs real costs per call.
 
@@ -127,7 +133,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - On a normal account an injection only affects that user's own results. The remaining risk is documented in the README.
 
 ## Database Schema (finalize column types in Milestone 1)
-- `users`: id, email (unique), hashed_password, created_at
+- `users`: id, email (unique), hashed_password, token_version (integer, default 0; incremented to invalidate all of the user's tokens), created_at
 - `lures`: id, user_id (FK → users), catalog_lure_id (nullable FK → catalog_lures; null for lures the user added by hand), name, type, brand, color, size, technique, quantity (default 1), notes, created_at, updated_at
 - `catalog_lures`: id, brand, model, type, technique, sizes (text[]), colors (text[]), source_name (`seed` for hand-seeded entries), source_url (nullable), last_scraped_at (nullable; set by the v2 scraper), created_at. Shared by all users; unique on (brand, model). `type` and `technique` use the same fixed lists as `lures`.
 - `knowledge_base_entries`: id, title, content (text), category (e.g. clarity, season, structure, weather), condition tags (for example season, clarity, water temperature range; exact columns decided in Milestone 4), source_type (`personal` or `external`), source_name, source_url (nullable), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
@@ -168,7 +174,7 @@ An eval harness measures whether the knowledge base and retrieval actually impro
 **Presentation:** publish a results table and a short write-up in the README. Any outcome is useful. If variant A matches C, that shows the knowledge base should focus on what Claude doesn't know (Erik's own patterns and local knowledge) rather than general bass-fishing advice.
 
 ## API Sketch
-- Auth: `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`
+- Auth: `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/change-password`, `POST /api/v1/auth/logout-all`
 - Lures: `GET/POST /api/v1/lures`, `GET/PATCH/DELETE /api/v1/lures/{id}`, all limited to the current user
 - Recommendations: `POST /api/v1/recommendations`, `GET /api/v1/recommendations` (history), `PATCH /api/v1/recommendations/{id}` (rating)
 - Catalog: `GET /api/v1/catalog?search=...` (search the shared catalog when adding a lure); filled by the seed script (v2: the scraper or feed importer), not by users
@@ -190,14 +196,17 @@ Set up the repo structure, the layered backend skeleton, Alembic, and the develo
 - **Write ADRs:** stack, RAG vs. a trained model, hand-written auth.
 - **Auth, hand-written in single-function steps** (Erik writes each one; Claude explains, points to docs and reviews):
   1. Hash a password and verify one (`pwdlib`), with tests
-  2. Create a JWT with an expiry
+  2. Create a JWT with an expiry and the user's token version
   3. Decode and validate a JWT, rejecting ones that are expired or have a bad signature
-  4. The `get_current_user` dependency
+  4. The `get_current_user` dependency, rejecting tokens whose version doesn't match the user's
   5. The signup endpoint
   6. The login endpoint
-- **Check-in (Claude: ask Erik after auth steps 1 and 2):** is the step-by-step approach working? If yes, continue through step 6. If it feels like no progress is being made, switch to the fallback in Growth Goal 1: Claude writes the rest of auth, Erik learns it until it can be explained line by line, then writes the "change password" endpoint alone.
+  7. The change password endpoint (increments `token_version`)
+  8. The log out everywhere endpoint
+- **Rate limiting:** set up `slowapi` with limits on signup and on login (per IP and per email).
+- **Check-in (Claude: ask Erik after auth steps 1 and 2):** is the step-by-step approach working? If yes, continue through step 8. If it feels like no progress is being made, switch to the fallback in Growth Goal 1: Claude writes steps 3 to 6, Erik learns them until they can be explained line by line, then writes steps 7 and 8 (change password and log out everywhere) alone.
 - **Deploy:** a `/health` endpoint; the backend on Render and the database on Neon (with pgvector enabled); migrations run as part of each deploy; auto-deploy on merge to `main`; secrets only in Render's environment variables. Check Render's terms of service, then set up the keep-warm ping.
-- **Done when:** a user can sign up, log in and call a protected endpoint, **on the live API**; migrations run cleanly from an empty database, locally and on Neon; merging to `main` deploys automatically; the auth logic has pytest tests; `docker compose up` gives a fresh clone a working local database; CI runs on every PR, and `main` can't be merged into while CI fails.
+- **Done when:** a user can sign up, log in and call a protected endpoint, **on the live API**; changing the password or logging out everywhere makes old tokens fail (with a test); login and signup are rate limited (with a test); migrations run cleanly from an empty database, locally and on Neon; merging to `main` deploys automatically; the auth logic has pytest tests; `docker compose up` gives a fresh clone a working local database; CI runs on every PR, and `main` can't be merged into while CI fails.
 
 ### Milestone 2: Lure inventory API
 CRUD endpoints for lures, limited to the current user.
@@ -220,7 +229,7 @@ Scaffold the React app. Build the signup and login pages and the inventory scree
 
 ### Milestone 5: Recommendation pipeline
 Build retrieval and the Claude generation step, including checking the output against the inventory. Build the recommendation endpoints and save history (ADR: JSONB for history).
-Add the safeguards from Decisions: the per-user quota, per-IP rate limiting on signup and recommendations, LLM failure handling, the cost and latency metrics, and the prompt injection mitigations.
+Add the safeguards from Decisions: the per-user quota, per-IP rate limiting on recommendations, LLM failure handling, the cost and latency metrics, and the prompt injection mitigations.
 - **Decide:** which Claude model to use, weighing cost against quality on this task. Compare a few real outputs before committing.
 - **Set up:** a spend limit in the Anthropic Console when creating the Claude API key.
 - **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics; ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
@@ -254,3 +263,5 @@ Write a short demo write-up and consider a demo video for LinkedIn. Do a full mo
 - Use the "did it work?" ratings to improve retrieval or re-rank recommendations
 - A mobile client that reuses the same API
 - Photo upload for lures
+- **Refresh tokens:** a short-lived access token plus a rotating refresh token stored hashed in a `refresh_tokens` table, for per-device logout. Revisit the token storage ADR when doing this, since refresh tokens usually live in an httpOnly cookie.
+- **Password reset and email verification:** need an email provider and single-use, expiring reset tokens

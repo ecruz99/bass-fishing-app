@@ -20,7 +20,7 @@ RAG has to earn its place: an eval harness (Milestone 6, ADR 0001) compares no k
 
 ## Key decisions (details and reasoning in the plan)
 - AI: Claude API for generation, Voyage AI for embeddings
-- Auth: hand-written JWT in FastAPI (no auth library or hosted auth)
+- Auth: hand-written JWT in FastAPI (no auth framework or hosted auth; PyJWT and pwdlib only), with Argon2 via `pwdlib`. Revocation uses `users.token_version`; change password and log out everywhere increment it. Login and signup are rate limited per IP and per email from Milestone 1. Refresh tokens, password reset and email verification are post-launch stretch goals
 - Lures use simple attributes (type, brand, color, size, technique, quantity, notes), not detailed action or depth specs
 - Recommendations are saved with conditions, result and a "did it work?" rating
 - Shared lure catalog: a hand-seeded catalog of 30 to 50 lures before launch (Milestone 8); a scraped catalog is a post-launch v2 (official data feeds first, scraping only where `robots.txt` and the terms of service allow it, facts only). `lures.catalog_lure_id` is nullable, so users can still add lures by hand
