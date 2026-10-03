@@ -21,7 +21,7 @@ RAG, not a trained model. A hand-curated knowledge base of 50–150 bass-fishing
 - Auth: hand-written JWT in FastAPI (no auth library or hosted auth)
 - Lures use simple attributes (type, brand, color, size, technique, quantity, notes), not detailed action or depth specs
 - Recommendations are saved with conditions, result and a "did it work?" rating
-- Shared lure catalog (Milestone 7): official data feeds first, and scraping only where `robots.txt` and the terms of service allow it, storing facts only. `lures.catalog_lure_id` is nullable, so users can still add lures by hand
+- Shared lure catalog: a hand-seeded catalog of 30 to 50 lures before launch (Milestone 7); a scraped catalog is a post-launch v2 (official data feeds first, scraping only where `robots.txt` and the terms of service allow it, facts only). `lures.catalog_lure_id` is nullable, so users can still add lures by hand
 - Conditions are entered manually for the MVP; auto-filling weather from Open-Meteo is a stretch goal
 - Hosting: Render (API), Neon (Postgres + pgvector), Vercel (frontend)
 - Backend layers: routers → services → repositories, Pydantic schemas separate from SQLAlchemy models, all schema changes through Alembic
