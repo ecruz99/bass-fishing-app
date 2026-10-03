@@ -76,9 +76,18 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **Lure catalog:** A shared master catalog of popular lures that users can pick from when adding to their inventory. They can still add their own lures by hand. Picking from the catalog is faster than typing everything in, and it keeps lure data consistent (brand names, types and techniques), which improves recommendations.
 - **Data source (v2 scraped catalog):** first look for official product data feeds (manufacturer or retailer, often through affiliate programs). Scrape only sites whose `robots.txt` and terms of service allow it. Rate-limit requests and identify the scraper honestly. Store facts only (brand, model, type, sizes, color names), never copied descriptions or product images.
-- **Timing:** the schema supports the catalog from Milestone 2 (a nullable `catalog_lure_id` on `lures`), so no migration of existing data is needed later. Before launch, Milestone 8 builds a small **hand-seeded catalog** (30 to 50 popular lures, no scraping) plus catalog search, so a recruiter trying the demo can pick lures instead of typing them in. The full **scraped catalog is a v2 after launch** (see Stretch Goals). It was postponed because it would add 20 to 35 hours before launch for little gain in interviews, while shipping sooner does more for the job search. Shipping it after launch also shows continued work on a live product.
+- **Timing:** the schema supports the catalog from Milestone 2 (a nullable `catalog_lure_id` on `lures`), so no migration of existing data is needed later. Before launch, Milestone 9 builds a small **hand-seeded catalog** (30 to 50 popular lures, no scraping) plus catalog search, so a recruiter trying the demo can pick lures instead of typing them in. The full **scraped catalog is a v2 after launch** (see Stretch Goals). It was postponed because it would add 20 to 35 hours before launch for little gain in interviews, while shipping sooner does more for the job search. Shipping it after launch also shows continued work on a live product.
 
 **Recommendation history:** Saved. Each recommendation stores the conditions, the output and an optional "did it work?" rating from the user. This adds about a day of work. It gives users a history of what worked. With few users the ratings will be sparse, so describe them honestly: feedback collected for future re-ranking, not a working feedback loop. Recommendation quality is measured by the eval harness instead (see Evaluation).
+- **Which lure was used:** when rating, the user can optionally say which of the picks they actually used. A rating applies to the whole recommendation, so without this, per-lure success rates would credit every pick equally.
+
+**Analytics:** user-facing charts for anglers about their own tackle box and history, in Milestone 8. There's no visitor tracking (product analytics).
+- **Inventory breakdown** by type, technique and color. It needs no history, so it's useful from day one.
+- **Recommendation timeline** by month or season, plus **most and never recommended lures** ("dead weight in your tackle box").
+- **Success rates** by lure (using "which lure was used") and by condition. They're shown only with at least 5 ratings, otherwise "not enough data yet." Refusing to chart a handful of data points is deliberate.
+- **A public system stats page:** total recommendations, average cost, median latency and the eval results, built from the Observability metrics. No personal data.
+- **Charts:** Recharts.
+- **Empty states:** new users see a clear message instead of blank charts. The demo's seed data includes enough rated history for the charts to show real data.
 
 **Knowledge base authoring:** Erik writes or transcribes every entry, and Claude refines it for clarity, gaps and consistent format. The domain knowledge stays Erik's to explain.
 - **One entry = one self-contained tip.** Entries are written by hand, so no automatic chunking is needed. Revisit this only if long documents are ever imported directly.
@@ -95,7 +104,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 **Presenting the AI-assisted development:** every commit already carries a `Co-Authored-By: Claude` line, so the README tells the same story the history shows. The framing is "directed and verified," backed by evidence:
 - **A short "How this was built" README section:** CLAUDE.md, hooks, small reviewed PRs, the explain-back rule, and a link to `docs/CLAUDE_LESSONS.md`.
 - **An explicit list of what Erik hand-wrote:** auth, the pgvector query, prompt assembly and the eval scoring logic. This list gives the rest of the story its credibility.
-- **Keep it short:** the app and the eval results lead, and the process supports them. A longer blog or LinkedIn write-up is optional in Milestone 10.
+- **Keep it short:** the app and the eval results lead, and the process supports them. A longer blog or LinkedIn write-up is optional in Milestone 11.
 
 **Showing the reasoning:** a reviewer who doesn't fish can't judge whether a recommendation is good, but they can judge visible, traceable reasoning.
 - **Per-lure citations:** each pick in Claude's structured output includes `cited_entry_ids`. The service drops any citation that wasn't in the entries retrieved for this request. It's the same guardrail as checking lure ownership, and it catches Claude citing something it never saw.
@@ -145,7 +154,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - **Provider down or spend limit reached:** a 503 in the standard error shape and a friendly "temporarily unavailable" message. The demo falls back to the landing page sample.
 - **Empty inventory:** return a clear message without calling Voyage or Claude.
 
-**Observability:** each saved recommendation records the model, input and output tokens, the computed cost, latency for each stage (embedding, retrieval, generation) and how many invalid IDs were dropped. Failures don't save a row, so they're written to structured JSON logs (visible in Render). The stored numbers feed the README ("each recommendation costs about $X and takes Y seconds") and the in-app analytics in issue #16.
+**Observability:** each saved recommendation records the model, input and output tokens, the computed cost, latency for each stage (embedding, retrieval, generation) and how many invalid IDs were dropped. Failures don't save a row, so they're written to structured JSON logs (visible in Render). The stored numbers feed the README ("each recommendation costs about $X and takes Y seconds") and the public system stats page (see Analytics).
 
 **Prompt injection:** lure `name` and `notes` are user text that goes into the prompt. Mitigations:
 - User data is wrapped in clear delimiters (for example XML tags), and the prompt tells Claude to treat it as data, not instructions.
@@ -158,9 +167,10 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - `lures`: id, user_id (FK → users), catalog_lure_id (nullable FK → catalog_lures; null for lures the user added by hand), name, type, brand, color, size, technique, quantity (default 1), notes, created_at, updated_at
 - `catalog_lures`: id, brand, model, type, technique, sizes (text[]), colors (text[]), source_name (`seed` for hand-seeded entries), source_url (nullable), last_scraped_at (nullable; set by the v2 scraper), created_at. Shared by all users; unique on (brand, model). `type` and `technique` use the same fixed lists as `lures`.
 - `knowledge_base_entries`: id, slug (unique, stable; the seed script upserts by it), title, content (text), category (e.g. clarity, season, structure, weather), condition tags (for example season, clarity, water temperature range; exact columns decided in Milestone 4), source_type (`personal` or `external`), source_name, source_url (nullable), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
-- `recommendations`: id, user_id (FK → users), conditions (JSONB), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning and cited entries (titles and sources), saved as a snapshot so the history still reads correctly if a lure is later deleted or an entry changes), worked (nullable boolean: the "did it work?" rating), model, input_tokens, output_tokens, cost_usd, embedding_ms, retrieval_ms, generation_ms, invalid_ids_dropped, created_at
+- `recommendations`: id, user_id (FK → users), condition columns (water_clarity, season, water_temp_f, air_temp_f, wind, pressure_trend, sky; values match the condition form and the knowledge base tags; exact types finalized in Milestone 5), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning and cited entries (titles and sources), saved as a snapshot so the history still reads correctly if a lure is later deleted or an entry changes), worked (nullable boolean: the "did it work?" rating), model, input_tokens, output_tokens, cost_usd, embedding_ms, retrieval_ms, generation_ms, invalid_ids_dropped, created_at
+- `recommendation_picks`: id, recommendation_id (FK → recommendations), lure_id (nullable FK → lures, set to null if the lure is deleted), rank, used (boolean, default false; at most one per recommendation: the "which lure did you use?" answer). Makes per-lure analytics simple joins.
 
-Why JSONB for conditions and results: the set of conditions will probably change while the project is being built, and history rows are only ever read as a whole, never filtered by individual fields. If filtering by field becomes necessary later, move those fields into real columns with a migration.
+Why columns for conditions but JSONB for the result: **query what you filter, snapshot what you display.** Analytics groups and filters by condition (success rate in stained water), and the condition set is now fixed (it matches the form and the knowledge base tags), so typed columns give database-level constraints and simpler SQL. The result is only ever displayed as a whole and must survive lure deletions and entry edits, so it stays a JSONB snapshot. Per-lure queries use `recommendation_picks` rather than unpacking the JSON.
 
 ## Recommendation Pipeline
 1. The user submits the conditions form, and the request goes to `POST /api/v1/recommendations`.
@@ -170,8 +180,8 @@ Why JSONB for conditions and results: the set of conditions will probably change
 5. pgvector returns the top-k most similar knowledge base entries by cosine distance (start with k=5 and tune it).
 6. The prompt sent to Claude contains the conditions, the retrieved entries and the user's lure inventory (wrapped in delimiters and marked as data), with instructions to recommend **only** lures from that inventory, to explain why each one fits, and to prefer Erik's personal entries when retrieved entries conflict.
 7. Claude returns structured output (lure IDs, reasoning and cited entry IDs for each pick), validated with Pydantic. The service checks that every returned lure ID belongs to the user's inventory and drops any that don't, so the model can't recommend a lure the user doesn't own. It also drops any citation that wasn't among the retrieved entries. Failures are handled as described in LLM failure handling.
-8. The service saves a `recommendations` row, including its cost, token and latency metrics, and returns the result.
-9. Later, the user can rate it with `PATCH /api/v1/recommendations/{id}` (`worked: true/false`).
+8. The service saves a `recommendations` row (conditions, result snapshot, and cost, token and latency metrics) plus one `recommendation_picks` row per pick, and returns the result.
+9. Later, the user can rate it with `PATCH /api/v1/recommendations/{id}` (`worked: true/false`, plus optionally which pick was used).
 
 ## Evaluation
 An eval harness measures whether the knowledge base and retrieval actually improve recommendations. Without it there's no answer to "why retrieve at all?" or "does the knowledge base beat Claude's own knowledge?" (ADR 0001).
@@ -198,7 +208,8 @@ An eval harness measures whether the knowledge base and retrieval actually impro
 ## API Sketch
 - Auth: `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/change-password`, `POST /api/v1/auth/logout-all`, `DELETE /api/v1/auth/me` (account deletion)
 - Lures: `GET/POST /api/v1/lures`, `GET/PATCH/DELETE /api/v1/lures/{id}`, all limited to the current user
-- Recommendations: `POST /api/v1/recommendations`, `GET /api/v1/recommendations` (history), `PATCH /api/v1/recommendations/{id}` (rating)
+- Recommendations: `POST /api/v1/recommendations`, `GET /api/v1/recommendations` (history), `PATCH /api/v1/recommendations/{id}` (rating, optionally with the pick used)
+- Analytics: `GET /api/v1/analytics/...` (aggregations for the current user's charts; exact endpoints designed in Milestone 8), `GET /api/v1/stats` (public system stats, no personal data)
 - Catalog: `GET /api/v1/catalog?search=...` (search the shared catalog when adding a lure); filled by the seed script (v2: the scraper or feed importer), not by users
 - Knowledge base: loaded by a seed/admin script, not a public endpoint
 
@@ -250,11 +261,11 @@ Scaffold the React app. Build the signup and login pages and the inventory scree
 - **Done when:** the eval scenarios and the fixed test inventory are written, with the held-out set stored separately; all stage 1 entries are embedded and stored with tags and source fields; a manual similarity query for a sample set of conditions returns entries that make sense; the seed script can be re-run safely and upserts by `slug`, so entry IDs never change.
 
 ### Milestone 5: Recommendation pipeline
-Build retrieval and the Claude generation step, including checking the output against the inventory and validating citations against the retrieved entries. Build the recommendation endpoints and save history (ADR: JSONB for history).
+Build retrieval and the Claude generation step, including checking the output against the inventory and validating citations against the retrieved entries. Build the recommendation endpoints and save history, including `recommendation_picks` rows (ADR: typed condition columns plus a JSONB result snapshot).
 Add the safeguards from Decisions: the per-user quota, per-IP rate limiting on recommendations, LLM failure handling, the cost and latency metrics, and the prompt injection mitigations.
 - **Decide:** which Claude model to use, weighing cost against quality on this task. Compare a few real outputs before committing.
 - **Set up:** a spend limit in the Anthropic Console when creating the Claude API key.
-- **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics; responses include entry titles, sources and scores but never entry content (with a test); ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
+- **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics, condition columns and `recommendation_picks` rows; a rating can record which pick was used; responses include entry titles, sources and scores but never entry content (with a test); ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
 
 ### Milestone 6: Evaluation
 Build the eval harness and run all four variants (see Evaluation). Erik hand-writes the scoring functions and the variant comparison; Claude can help with the runner and boilerplate.
@@ -263,19 +274,23 @@ Build the eval harness and run all four variants (see Evaluation). Erik hand-wri
 - **Check-in (Claude: ask Erik when this milestone is finished):** based on the results, should stage 2 of the knowledge base (the larger expansion) happen before launch or after? Re-run the eval after the expansion either way.
 
 ### Milestone 7: Frontend recommendations
-The conditions form, the results display (with citation chips, source labels and the "What the AI looked at" panel), the history view and the "did it work?" rating.
+The conditions form, the results display (with citation chips, source labels and the "What the AI looked at" panel), the history view and the "did it work?" rating, with an optional "Which lure did you use?"
 - **Done when:** the whole flow works in the browser, from entering conditions to seeing results to rating them later from history; every recommended lure shows the entries it's based on, and history still shows them correctly after an entry is edited.
 
-### Milestone 8: Seeded lure catalog
+### Milestone 8: Analytics
+User-facing charts built with Recharts (see Analytics in Decisions): the inventory breakdown, the recommendation timeline, most and never recommended lures, success rates with a minimum sample size, and the public system stats page.
+- **Done when:** each chart is backed by a tested aggregation endpoint; success rates show "not enough data yet" below 5 ratings; a brand-new user sees a useful inventory breakdown and clear empty states instead of blank charts; the system stats page shows no personal data.
+
+### Milestone 9: Seeded lure catalog
 Erik curates a data file (JSON or CSV) of 30 to 50 popular bass lures, storing facts only: brand, model, type, technique, sizes and color names. A seed script loads it into `catalog_lures`, and the add-lure screen gets catalog search. Roughly 3 to 5 hours, with no scraping.
 - **Done when:** the seed script can be re-run safely without creating duplicates; users can search the catalog and add a lure from it, or still add one by hand; catalog entries use the same fixed `type` and `technique` lists as `lures`.
 
-### Milestone 9: Demo and polish
-The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus past recommendations with ratings), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Add what real users need before they sign up: the privacy note, account deletion and a feedback channel. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, the "How this was built" section with the hand-written list, and a note about the free tier's slow first request).
+### Milestone 10: Demo and polish
+The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus enough past recommendations with ratings, including which lure was used, for the analytics charts to show real data), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Add what real users need before they sign up: the privacy note, account deletion and a feedback channel. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, the "How this was built" section with the hand-written list, and a note about the free tier's slow first request).
 - **Decide:** how the nightly reset runs (for example a scheduled GitHub Actions workflow, which could also run the keep-warm ping).
 - **Done when:** a first-time visitor sees a real recommendation within 10 seconds of opening the URL, without signing up; the demo data resets every night; the demo limits fall back to the landing page sample; demo visitors can't edit `name` or `notes`; a user can delete their account and all their data (with a test), but the demo account can't be deleted; the privacy note and feedback channel are live; the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
 
-### Milestone 10: Showcase
+### Milestone 11: Showcase
 Write a short demo write-up and consider a demo video for LinkedIn (optionally with a longer write-up on the AI-assisted process). Do a full mock-interview walkthrough of the codebase, and write the resume bullets (see `docs/CAREER_CONTEXT.md`). Recruit 5 to 10 real users and collect their feedback.
 - **Done when:** Erik can give a 5-minute walkthrough of the app and a 15-minute deep dive into the architecture, and answer every question in the interview question bank; real users have been recruited, and once there's enough usage, the README shows real usage numbers.
 
@@ -287,3 +302,4 @@ Write a short demo write-up and consider a demo video for LinkedIn (optionally w
 - Photo upload for lures
 - **Refresh tokens:** a short-lived access token plus a rotating refresh token stored hashed in a `refresh_tokens` table, for per-device logout. Revisit the token storage ADR when doing this, since refresh tokens usually live in an httpOnly cookie.
 - **Password reset and email verification:** need an email provider and single-use, expiring reset tokens
+- **Catch log:** record catches (date, lure, conditions, fish) independently of recommendations. It's much richer data for analytics than "did it work?", but it's a whole new feature.
