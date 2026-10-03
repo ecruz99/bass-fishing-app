@@ -26,6 +26,8 @@ Build the backend the way a professional team would, and be able to explain why 
 - **Migrations:** every schema change goes through Alembic. Never edit the database by hand.
 - **API design:** RESTful resources under `/api/v1`, a consistent error response shape, correct status codes, and pagination on list endpoints.
 - **Decision records:** write a short ADR (Architecture Decision Record: context, decision, alternatives, consequences) in `docs/decisions/` for each significant choice. The decisions below are the first batch to write up.
+  - **When to write one:** the decision is hard to reverse, affects several parts of the system, or an interviewer is likely to ask "why?" Smaller decisions just go in this plan.
+  - **Keep it short:** start from `docs/decisions/0000-template.md` and stay within one page (about 400 words), so a reviewer can read it in two minutes.
 - **Design before code:** for each feature, sketch the endpoints, data shapes and edge cases before writing any code.
 - **Testable by design:** services should be unit-testable with pytest without a running server. This is the proof that the layering works.
 
@@ -84,6 +86,16 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - **Charts and flow charts are transcribed into text entries**, tagged with the conditions they apply to (for example season, clarity, water temperature range). The tags also power eval variant D. Images are not embedded directly.
 - **External sources follow the catalog's facts-only rule:** restate facts in Erik's own words, never copy text or images, and record each entry's source type (personal or external), source name and URL.
 - **Conflicting advice:** keep both entries, tagged with their source. The prompt tells Claude to prefer Erik's personal entries when they conflict. Only exact duplicates are merged.
+
+**Real users:** after launch, recruit 5 to 10 anglers (fishing friends) to use the app for a season. Real usage is the only way the "did it work?" ratings become real data, and usage numbers in the README ("used by N anglers over X weeks, Y rated recommendations") beat any feature. Real users mean real responsibilities, so these exist before anyone signs up:
+- **A short privacy note:** what's stored (email, password hash, lures, recommendations), why, and that it's never sold or shared.
+- **Account deletion:** `DELETE /api/v1/auth/me` deletes the user and all their lures and recommendations. It's blocked for the shared demo account.
+- **A feedback channel:** for example a simple form, or a link to open a GitHub issue.
+
+**Presenting the AI-assisted development:** every commit already carries a `Co-Authored-By: Claude` line, so the README tells the same story the history shows. The framing is "directed and verified," backed by evidence:
+- **A short "How this was built" README section:** CLAUDE.md, hooks, small reviewed PRs, the explain-back rule, and a link to `docs/CLAUDE_LESSONS.md`.
+- **An explicit list of what Erik hand-wrote:** auth, the pgvector query, prompt assembly and the eval scoring logic. This list gives the rest of the story its credibility.
+- **Keep it short:** the app and the eval results lead, and the process supports them. A longer blog or LinkedIn write-up is optional in Milestone 10.
 
 **Showing the reasoning:** a reviewer who doesn't fish can't judge whether a recommendation is good, but they can judge visible, traceable reasoning.
 - **Per-lure citations:** each pick in Claude's structured output includes `cited_entry_ids`. The service drops any citation that wasn't in the entries retrieved for this request. It's the same guardrail as checking lure ownership, and it catches Claude citing something it never saw.
@@ -184,7 +196,7 @@ An eval harness measures whether the knowledge base and retrieval actually impro
 **Presentation:** publish a results table and a short write-up in the README. Any outcome is useful. If variant A matches C, that shows the knowledge base should focus on what Claude doesn't know (Erik's own patterns and local knowledge) rather than general bass-fishing advice.
 
 ## API Sketch
-- Auth: `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/change-password`, `POST /api/v1/auth/logout-all`
+- Auth: `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/change-password`, `POST /api/v1/auth/logout-all`, `DELETE /api/v1/auth/me` (account deletion)
 - Lures: `GET/POST /api/v1/lures`, `GET/PATCH/DELETE /api/v1/lures/{id}`, all limited to the current user
 - Recommendations: `POST /api/v1/recommendations`, `GET /api/v1/recommendations` (history), `PATCH /api/v1/recommendations/{id}` (rating)
 - Catalog: `GET /api/v1/catalog?search=...` (search the shared catalog when adding a lure); filled by the seed script (v2: the scraper or feed importer), not by users
@@ -259,13 +271,13 @@ Erik curates a data file (JSON or CSV) of 30 to 50 popular bass lures, storing f
 - **Done when:** the seed script can be re-run safely without creating duplicates; users can search the catalog and add a lure from it, or still add one by hand; catalog entries use the same fixed `type` and `technique` lists as `lures`.
 
 ### Milestone 9: Demo and polish
-The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus past recommendations with ratings), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, and a note about the free tier's slow first request).
+The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus past recommendations with ratings), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Add what real users need before they sign up: the privacy note, account deletion and a feedback channel. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, the "How this was built" section with the hand-written list, and a note about the free tier's slow first request).
 - **Decide:** how the nightly reset runs (for example a scheduled GitHub Actions workflow, which could also run the keep-warm ping).
-- **Done when:** a first-time visitor sees a real recommendation within 10 seconds of opening the URL, without signing up; the demo data resets every night; the demo limits fall back to the landing page sample; demo visitors can't edit `name` or `notes`; the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
+- **Done when:** a first-time visitor sees a real recommendation within 10 seconds of opening the URL, without signing up; the demo data resets every night; the demo limits fall back to the landing page sample; demo visitors can't edit `name` or `notes`; a user can delete their account and all their data (with a test), but the demo account can't be deleted; the privacy note and feedback channel are live; the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
 
 ### Milestone 10: Showcase
-Write a short demo write-up and consider a demo video for LinkedIn. Do a full mock-interview walkthrough of the codebase, and write the resume bullets (see `docs/CAREER_CONTEXT.md`).
-- **Done when:** Erik can give a 5-minute walkthrough of the app and a 15-minute deep dive into the architecture, and answer every question in the interview question bank.
+Write a short demo write-up and consider a demo video for LinkedIn (optionally with a longer write-up on the AI-assisted process). Do a full mock-interview walkthrough of the codebase, and write the resume bullets (see `docs/CAREER_CONTEXT.md`). Recruit 5 to 10 real users and collect their feedback.
+- **Done when:** Erik can give a 5-minute walkthrough of the app and a 15-minute deep dive into the architecture, and answer every question in the interview question bank; real users have been recruited, and once there's enough usage, the README shows real usage numbers.
 
 ## Stretch Goals (after the core app ships)
 - **Lure catalog v2:** expand the seeded catalog using official data feeds, or responsible scraping where allowed. Research sources, build the importer, and clean and de-duplicate the data (for example "KVD 1.5" vs. "KVD 1.5 Squarebill"). Before writing any scraper, check each site's `robots.txt` and terms of service, and write an ADR on which sources are used and why. Follow the data source rules in Decisions.
