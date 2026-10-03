@@ -29,6 +29,7 @@ RAG has to earn its place: an eval harness (Milestone 6, ADR 0001) compares no k
 - Demo: a shared demo account with a stocked inventory and history, reset nightly, plus a pre-computed real recommendation on the landing page (Milestone 9). Demo visitors can't edit free text, and demo recommendations are limited per IP and per day
 - Safeguards: provider spend limits, a per-user daily quota (a count of `recommendations` rows), per-IP rate limiting with `slowapi`, defined LLM failure handling, cost and latency metrics on each recommendation, and prompt injection mitigations (delimited user data, length limits)
 - Backend layers: routers → services → repositories, Pydantic schemas separate from SQLAlchemy models, all schema changes through Alembic
+- Tooling: `uv`, `ruff`, `mypy`; docker-compose runs only the local Postgres + pgvector; GitHub Actions CI on every PR; branch protection on `main`; a Claude Code hook and a pre-commit hook run `ruff`
 
 ## Working with Erik
 Erik must understand every line of this codebase and be able to explain it in interviews. Learning to direct and correct Claude is also an explicit goal.
@@ -45,7 +46,7 @@ Follow a professional team workflow, even when working solo.
 - **Open the PR with `gh pr create`.** The description covers what changed, why, how it was tested, and screenshots for UI changes. Reference the issue if there is one (`Closes #12`).
 - **Erik reviews and merges every PR.** Claude opens PRs but never merges them, and never pushes to `main` or force-pushes.
 - **Squash merge**, then delete the branch.
-- Tests (and CI, once it exists) must pass before a PR is opened.
+- Run the tests and linters locally before opening a PR. CI runs on the PR and must pass before merging (enforced by branch protection once it's set up in Milestone 1).
 
 ## Conventions
 - Keep `docs/PROJECT_PLAN.md` in sync when decisions are made or scope changes.
