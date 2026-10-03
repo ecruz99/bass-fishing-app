@@ -18,6 +18,8 @@ RAG, not a trained model. A hand-curated knowledge base is embedded into pgvecto
 
 RAG has to earn its place: an eval harness (Milestone 6, ADR 0001) compares no knowledge base, the whole knowledge base in the prompt, vector top-k, and metadata filter + vector, using Erik's scenarios with a held-out set.
 
+Each recommended lure cites the knowledge base entries it's based on. Citations are validated against the retrieved entries (like lure ownership), shown in the UI with source labels, and snapshotted into history. Entries have a stable `slug`, so re-seeding never changes their IDs.
+
 ## Key decisions (details and reasoning in the plan)
 - AI: Claude API for generation, Voyage AI for embeddings
 - Auth: hand-written JWT in FastAPI (no auth framework or hosted auth; PyJWT and pwdlib only), with Argon2 via `pwdlib`. Revocation uses `users.token_version`; change password and log out everywhere increment it. Login and signup are rate limited per IP and per email from Milestone 1. Refresh tokens, password reset and email verification are post-launch stretch goals
