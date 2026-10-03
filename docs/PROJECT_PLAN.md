@@ -76,18 +76,25 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **Lure catalog:** A shared master catalog of popular lures that users can pick from when adding to their inventory. They can still add their own lures by hand. Picking from the catalog is faster than typing everything in, and it keeps lure data consistent (brand names, types and techniques), which improves recommendations.
 - **Data source (v2 scraped catalog):** first look for official product data feeds (manufacturer or retailer, often through affiliate programs). Scrape only sites whose `robots.txt` and terms of service allow it. Rate-limit requests and identify the scraper honestly. Store facts only (brand, model, type, sizes, color names), never copied descriptions or product images.
-- **Timing:** the schema supports the catalog from Milestone 2 (a nullable `catalog_lure_id` on `lures`), so no migration of existing data is needed later. Before launch, Milestone 9 builds a small **hand-seeded catalog** (30 to 50 popular lures, no scraping) plus catalog search, so a recruiter trying the demo can pick lures instead of typing them in. The full **scraped catalog is a v2 after launch** (see Stretch Goals). It was postponed because it would add 20 to 35 hours before launch for little gain in interviews, while shipping sooner does more for the job search. Shipping it after launch also shows continued work on a live product.
+- **Timing:** the schema supports the catalog from Milestone 2 (a nullable `catalog_lure_id` on `lures`), so no migration of existing data is needed later. Before launch, Milestone 10 builds a small **hand-seeded catalog** (30 to 50 popular lures, no scraping) plus catalog search, so a recruiter trying the demo can pick lures instead of typing them in. The full **scraped catalog is a v2 after launch** (see Stretch Goals). It was postponed because it would add 20 to 35 hours before launch for little gain in interviews, while shipping sooner does more for the job search. Shipping it after launch also shows continued work on a live product.
 
 **Recommendation history:** Saved. Each recommendation stores the conditions, the output and an optional "did it work?" rating from the user. This adds about a day of work. It gives users a history of what worked. With few users the ratings will be sparse, so describe them honestly: feedback collected for future re-ranking, not a working feedback loop. Recommendation quality is measured by the eval harness instead (see Evaluation).
 - **Which lure was used:** when rating, the user can optionally say which of the picks they actually used. A rating applies to the whole recommendation, so without this, per-lure success rates would credit every pick equally.
 
-**Analytics:** user-facing charts for anglers about their own tackle box and history, in Milestone 8. There's no visitor tracking (product analytics).
+**Catch log:** users record their catches, in Milestone 8. Catches are much stronger data than the "did it work?" rating, and they're the main input for analytics.
+- **Fields:** date, species (largemouth, smallmouth, spotted), fish count, the biggest fish's weight and length (optional), the lure (a nullable link plus the lure's name snapshotted, so the log still reads correctly after a lure is deleted), conditions (the same typed columns as recommendations, optional), water body name (optional free text) and notes.
+- **No GPS or exact locations:** anglers guard their spots, and storing them would create a privacy problem the app doesn't need.
+- **Linked to recommendations (optional):** a "Log a catch" button on a recommendation pre-fills its conditions and lures and stores the `recommendation_id`. Catches can also be logged on their own.
+- **Not sent to the LLM:** catch history doesn't feed into recommendations yet, so the prompt and the eval stay unchanged. Personalizing recommendations from catches is a stretch goal.
+
+**Analytics:** user-facing charts for anglers about their own tackle box and history, in Milestone 9. There's no visitor tracking (product analytics).
 - **Inventory breakdown** by type, technique and color. It needs no history, so it's useful from day one.
 - **Recommendation timeline** by month or season, plus **most and never recommended lures** ("dead weight in your tackle box").
-- **Success rates** by lure (using "which lure was used") and by condition. They're shown only with at least 5 ratings, otherwise "not enough data yet." Refusing to chart a handful of data points is deliberate.
+- **Catches over time, by lure and by condition**, from the catch log.
+- **Success rates** by lure and by condition, from catches and from ratings (using "which lure was used"). They're shown only with at least 5 data points, otherwise "not enough data yet." Refusing to chart a handful of data points is deliberate.
 - **A public system stats page:** total recommendations, average cost, median latency and the eval results, built from the Observability metrics. No personal data.
 - **Charts:** Recharts.
-- **Empty states:** new users see a clear message instead of blank charts. The demo's seed data includes enough rated history for the charts to show real data.
+- **Empty states:** new users see a clear message instead of blank charts. The demo's seed data includes enough rated history and catches for the charts to show real data.
 
 **Knowledge base authoring:** Erik writes or transcribes every entry, and Claude refines it for clarity, gaps and consistent format. The domain knowledge stays Erik's to explain.
 - **One entry = one self-contained tip.** Entries are written by hand, so no automatic chunking is needed. Revisit this only if long documents are ever imported directly.
@@ -97,14 +104,14 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - **Conflicting advice:** keep both entries, tagged with their source. The prompt tells Claude to prefer Erik's personal entries when they conflict. Only exact duplicates are merged.
 
 **Real users:** after launch, recruit 5 to 10 anglers (fishing friends) to use the app for a season. Real usage is the only way the "did it work?" ratings become real data, and usage numbers in the README ("used by N anglers over X weeks, Y rated recommendations") beat any feature. Real users mean real responsibilities, so these exist before anyone signs up:
-- **A short privacy note:** what's stored (email, password hash, lures, recommendations), why, and that it's never sold or shared.
-- **Account deletion:** `DELETE /api/v1/auth/me` deletes the user and all their lures and recommendations. It's blocked for the shared demo account.
+- **A short privacy note:** what's stored (email, password hash, lures, recommendations, catches), why, and that it's never sold or shared.
+- **Account deletion:** `DELETE /api/v1/auth/me` deletes the user and all their lures, recommendations and catches. It's blocked for the shared demo account.
 - **A feedback channel:** for example a simple form, or a link to open a GitHub issue.
 
 **Presenting the AI-assisted development:** every commit already carries a `Co-Authored-By: Claude` line, so the README tells the same story the history shows. The framing is "directed and verified," backed by evidence:
 - **A short "How this was built" README section:** CLAUDE.md, hooks, small reviewed PRs, the explain-back rule, and a link to `docs/CLAUDE_LESSONS.md`.
 - **An explicit list of what Erik hand-wrote:** auth, the pgvector query, prompt assembly and the eval scoring logic. This list gives the rest of the story its credibility.
-- **Keep it short:** the app and the eval results lead, and the process supports them. A longer blog or LinkedIn write-up is optional in Milestone 11.
+- **Keep it short:** the app and the eval results lead, and the process supports them. A longer blog or LinkedIn write-up is optional in Milestone 12.
 
 **Showing the reasoning:** a reviewer who doesn't fish can't judge whether a recommendation is good, but they can judge visible, traceable reasoning.
 - **Per-lure citations:** each pick in Claude's structured output includes `cited_entry_ids`. The service drops any citation that wasn't in the entries retrieved for this request. It's the same guardrail as checking lure ownership, and it catches Claude citing something it never saw.
@@ -137,7 +144,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 **Demo experience:** a recruiter should see the app working within seconds, without signing up.
 - **Shared demo account, reset nightly:** a "Try the demo" button logs into one demo user with a realistic inventory and past recommendations (with ratings, so the history view isn't empty). A scheduled job restores the demo data every night. Visitors may briefly see each other's changes; that's accepted for simplicity.
 - **Demo recommendation limits:** every visitor shares the demo account, so a per-user quota would let one visitor use it up. Instead: 3 recommendations per visitor IP per day, plus 50 per day in total (a count of the demo user's `recommendations` rows). When either limit is hit, show the landing page sample and "Demo limit reached, sign up to keep going," so the limit never produces a broken page.
-- **Demo free text is locked:** demo visitors can add lures (by picking from the catalog, so the name comes from the catalog), delete them and change structured fields like quantity, but can't edit `name` or `notes`. This stops one visitor from planting prompt injection text that every other visitor would see until the nightly reset.
+- **Demo free text is locked:** demo visitors can add lures (by picking from the catalog, so the name comes from the catalog), delete them and change structured fields like quantity, but can't edit `name` or `notes`. The same applies to catches: demo visitors can log them, but without notes or a water body name. This stops one visitor from planting prompt injection text that every other visitor would see until the nightly reset.
 - **Landing page sample:** one real recommendation, pre-computed, saved as JSON and labeled as real output. It's free, appears instantly, and still works while the backend is asleep.
 
 **Cost and abuse safeguards:** signup is free and every recommendation calls paid APIs, so several cheap layers each catch what the others miss.
@@ -169,6 +176,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 - `knowledge_base_entries`: id, slug (unique, stable; the seed script upserts by it), title, content (text), category (e.g. clarity, season, structure, weather), condition tags (for example season, clarity, water temperature range; exact columns decided in Milestone 4), source_type (`personal` or `external`), source_name, source_url (nullable), embedding (vector, whose dimension must match the Voyage model's output), created_at. Shared by all users; not per-user.
 - `recommendations`: id, user_id (FK → users), condition columns (water_clarity, season, water_temp_f, air_temp_f, wind, pressure_trend, sky; values match the condition form and the knowledge base tags; exact types finalized in Milestone 5), retrieved_entry_ids (int[]), result (JSONB: the recommended lures with their reasoning and cited entries (titles and sources), saved as a snapshot so the history still reads correctly if a lure is later deleted or an entry changes), worked (nullable boolean: the "did it work?" rating), model, input_tokens, output_tokens, cost_usd, embedding_ms, retrieval_ms, generation_ms, invalid_ids_dropped, created_at
 - `recommendation_picks`: id, recommendation_id (FK → recommendations), lure_id (nullable FK → lures, set to null if the lure is deleted), rank, used (boolean, default false; at most one per recommendation: the "which lure did you use?" answer). Makes per-lure analytics simple joins.
+- `catches`: id, user_id (FK → users), caught_on (date), species, fish_count, biggest_weight (nullable), biggest_length (nullable), lure_id (nullable FK → lures, set to null if the lure is deleted), lure_name (snapshot), recommendation_id (nullable FK → recommendations), the same condition columns as `recommendations` (all nullable), water_body (nullable), notes (nullable), created_at. No GPS or exact location.
 
 Why columns for conditions but JSONB for the result: **query what you filter, snapshot what you display.** Analytics groups and filters by condition (success rate in stained water), and the condition set is now fixed (it matches the form and the knowledge base tags), so typed columns give database-level constraints and simpler SQL. The result is only ever displayed as a whole and must survive lure deletions and entry edits, so it stays a JSONB snapshot. Per-lure queries use `recommendation_picks` rather than unpacking the JSON.
 
@@ -209,7 +217,8 @@ An eval harness measures whether the knowledge base and retrieval actually impro
 - Auth: `POST /api/v1/auth/signup`, `POST /api/v1/auth/login`, `GET /api/v1/auth/me`, `POST /api/v1/auth/change-password`, `POST /api/v1/auth/logout-all`, `DELETE /api/v1/auth/me` (account deletion)
 - Lures: `GET/POST /api/v1/lures`, `GET/PATCH/DELETE /api/v1/lures/{id}`, all limited to the current user
 - Recommendations: `POST /api/v1/recommendations`, `GET /api/v1/recommendations` (history), `PATCH /api/v1/recommendations/{id}` (rating, optionally with the pick used)
-- Analytics: `GET /api/v1/analytics/...` (aggregations for the current user's charts; exact endpoints designed in Milestone 8), `GET /api/v1/stats` (public system stats, no personal data)
+- Catches: `GET/POST /api/v1/catches`, `GET/PATCH/DELETE /api/v1/catches/{id}`, all limited to the current user
+- Analytics: `GET /api/v1/analytics/...` (aggregations for the current user's charts; exact endpoints designed in Milestone 9), `GET /api/v1/stats` (public system stats, no personal data)
 - Catalog: `GET /api/v1/catalog?search=...` (search the shared catalog when adding a lure); filled by the seed script (v2: the scraper or feed importer), not by users
 - Knowledge base: loaded by a seed/admin script, not a public endpoint
 
@@ -277,20 +286,25 @@ Build the eval harness and run all four variants (see Evaluation). Erik hand-wri
 The conditions form, the results display (with citation chips, source labels and the "What the AI looked at" panel), the history view and the "did it work?" rating, with an optional "Which lure did you use?"
 - **Done when:** the whole flow works in the browser, from entering conditions to seeing results to rating them later from history; every recommended lure shows the entries it's based on, and history still shows them correctly after an entry is edited.
 
-### Milestone 8: Analytics
-User-facing charts built with Recharts (see Analytics in Decisions): the inventory breakdown, the recommendation timeline, most and never recommended lures, success rates with a minimum sample size, and the public system stats page.
-- **Done when:** each chart is backed by a tested aggregation endpoint; success rates show "not enough data yet" below 5 ratings; a brand-new user sees a useful inventory breakdown and clear empty states instead of blank charts; the system stats page shows no personal data.
+### Milestone 8: Catch log
+Catch CRUD in the API and the UI (see Catch log in Decisions), plus a "Log a catch" button on recommendations that pre-fills conditions and lures.
+- **Decide:** units for weight and length (pounds and ounces, or decimal pounds; inches) and whether the user can switch them.
+- **Done when:** a user can log, edit and delete catches, standalone or from a recommendation; one user can never read or change another user's catches (with a test); a catch still reads correctly after its lure is deleted; length limits apply to `water_body` and `notes`.
 
-### Milestone 9: Seeded lure catalog
+### Milestone 9: Analytics
+User-facing charts built with Recharts (see Analytics in Decisions): the inventory breakdown, the recommendation timeline, most and never recommended lures, catches over time and by lure and condition, success rates with a minimum sample size, and the public system stats page.
+- **Done when:** each chart is backed by a tested aggregation endpoint; success rates show "not enough data yet" below 5 data points; a brand-new user sees a useful inventory breakdown and clear empty states instead of blank charts; the system stats page shows no personal data.
+
+### Milestone 10: Seeded lure catalog
 Erik curates a data file (JSON or CSV) of 30 to 50 popular bass lures, storing facts only: brand, model, type, technique, sizes and color names. A seed script loads it into `catalog_lures`, and the add-lure screen gets catalog search. Roughly 3 to 5 hours, with no scraping.
 - **Done when:** the seed script can be re-run safely without creating duplicates; users can search the catalog and add a lure from it, or still add one by hand; catalog entries use the same fixed `type` and `technique` lists as `lures`.
 
-### Milestone 10: Demo and polish
-The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus enough past recommendations with ratings, including which lure was used, for the analytics charts to show real data), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Add what real users need before they sign up: the privacy note, account deletion and a feedback channel. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, the "How this was built" section with the hand-written list, and a note about the free tier's slow first request).
+### Milestone 11: Demo and polish
+The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus enough past recommendations with ratings, including which lure was used, and enough catches for the analytics charts to show real data), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Add what real users need before they sign up: the privacy note, account deletion and a feedback channel. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, the "How this was built" section with the hand-written list, and a note about the free tier's slow first request).
 - **Decide:** how the nightly reset runs (for example a scheduled GitHub Actions workflow, which could also run the keep-warm ping).
 - **Done when:** a first-time visitor sees a real recommendation within 10 seconds of opening the URL, without signing up; the demo data resets every night; the demo limits fall back to the landing page sample; demo visitors can't edit `name` or `notes`; a user can delete their account and all their data (with a test), but the demo account can't be deleted; the privacy note and feedback channel are live; the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
 
-### Milestone 11: Showcase
+### Milestone 12: Showcase
 Write a short demo write-up and consider a demo video for LinkedIn (optionally with a longer write-up on the AI-assisted process). Do a full mock-interview walkthrough of the codebase, and write the resume bullets (see `docs/CAREER_CONTEXT.md`). Recruit 5 to 10 real users and collect their feedback.
 - **Done when:** Erik can give a 5-minute walkthrough of the app and a 15-minute deep dive into the architecture, and answer every question in the interview question bank; real users have been recruited, and once there's enough usage, the README shows real usage numbers.
 
@@ -302,4 +316,4 @@ Write a short demo write-up and consider a demo video for LinkedIn (optionally w
 - Photo upload for lures
 - **Refresh tokens:** a short-lived access token plus a rotating refresh token stored hashed in a `refresh_tokens` table, for per-device logout. Revisit the token storage ADR when doing this, since refresh tokens usually live in an httpOnly cookie.
 - **Password reset and email verification:** need an email provider and single-use, expiring reset tokens
-- **Catch log:** record catches (date, lure, conditions, fish) independently of recommendations. It's much richer data for analytics than "did it work?", but it's a whole new feature.
+- **Personalize recommendations from the catch log:** include the user's past catches in similar conditions in the prompt. This changes the eval too: scenarios would need fixed catch histories, and it would be a new variant to compare.
