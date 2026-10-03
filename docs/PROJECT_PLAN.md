@@ -87,10 +87,11 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **Showing the reasoning:** a reviewer who doesn't fish can't judge whether a recommendation is good, but they can judge visible, traceable reasoning.
 - **Per-lure citations:** each pick in Claude's structured output includes `cited_entry_ids`. The service drops any citation that wasn't in the entries retrieved for this request. It's the same guardrail as checking lure ownership, and it catches Claude citing something it never saw.
-- **On each recommended lure:** the reasoning plus "Based on" chips with the cited entries' titles. Clicking a chip expands the entry's text.
+- **On each recommended lure:** the reasoning plus "Based on" chips with the cited entries' titles.
 - **Source labels:** "From Erik's notes" for personal entries, or the source name with a link for external ones.
-- **"What the AI looked at":** a collapsible panel, hidden by default, listing all retrieved entries with their similarity scores, including the ones Claude didn't cite.
-- **The knowledge base is publicly readable** through citations. That's accepted: entries are Erik's own writing or facts restated in his words.
+- **"What the AI looked at":** a collapsible panel, hidden by default, listing the titles of all retrieved entries with their similarity scores, including the ones Claude didn't cite.
+- **Titles only, never entry content:** the knowledge base stays private. This is enforced in the API response schema (titles, sources and scores only), not just hidden in the UI; otherwise anyone could read the content in the browser's dev tools.
+- **Titles must stand on their own,** since they're all a reviewer sees. For example "Stained water, early spring: slow-rolled spinnerbait," not "Spring tip #3."
 - **History stays correct:** each entry has a stable `slug` so re-seeding never changes IDs, and the cited entries' titles and sources are snapshotted into the stored result.
 
 **Development tooling and CI:**
@@ -241,7 +242,7 @@ Build retrieval and the Claude generation step, including checking the output ag
 Add the safeguards from Decisions: the per-user quota, per-IP rate limiting on recommendations, LLM failure handling, the cost and latency metrics, and the prompt injection mitigations.
 - **Decide:** which Claude model to use, weighing cost against quality on this task. Compare a few real outputs before committing.
 - **Set up:** a spend limit in the Anthropic Console when creating the Claude API key.
-- **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics; ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
+- **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics; responses include entry titles, sources and scores but never entry content (with a test); ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
 
 ### Milestone 6: Evaluation
 Build the eval harness and run all four variants (see Evaluation). Erik hand-writes the scoring functions and the variant comparison; Claude can help with the runner and boilerplate.
