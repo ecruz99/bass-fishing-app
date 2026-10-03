@@ -30,3 +30,20 @@ A log of times Claude Code went wrong on this project: what happened, how it was
 - When I only want an evaluation, I'll say so ("don't build anything yet"). For bigger work I'll use plan mode, which stops Claude from editing files until I approve a plan.
 - If Claude starts doing something I didn't ask for, I'll press Esc right away instead of letting it finish.
 - If this happens again, I'll add an explicit rule to `CLAUDE.md`.
+
+---
+
+## 2026-10-03: Rejected a command, but it had already run
+
+**What happened:** Claude ran one command that would commit a `CLAUDE.md` change, push it and update the PR description. I rejected it because I wanted to check the scope first. Claude told me "nothing was committed or pushed." When it tried to commit again, git said "nothing to commit." The rejected command had already committed and pushed before my rejection took effect.
+
+**How it was caught:** Claude noticed the unexpected git output, checked `git log` on the branch and on GitHub, and corrected what it had told me.
+
+**Why it happened:** rejecting a tool call isn't a guaranteed undo. By the time it registered, the command had already run. Claude also reported the state from what it assumed, without checking first.
+
+**Fix:** Claude checked the real state and corrected its statement. The pushed commit happened to match what I chose afterward, and nothing reached `main` because only I merge.
+
+**Rule going forward:**
+- After I reject or interrupt something, I'll ask Claude to check the actual state (`git status`, `git log`, `gh pr view`) before trusting any summary.
+- Claude should verify before reporting state, especially after an interruption.
+- Branch protection and PR review are the safety net: anything pushed by mistake still can't reach `main` without my review.
