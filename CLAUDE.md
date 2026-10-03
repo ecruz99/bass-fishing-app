@@ -26,7 +26,8 @@ RAG has to earn its place: an eval harness (Milestone 6, ADR 0001) compares no k
 - Shared lure catalog: a hand-seeded catalog of 30 to 50 lures before launch (Milestone 8); a scraped catalog is a post-launch v2 (official data feeds first, scraping only where `robots.txt` and the terms of service allow it, facts only). `lures.catalog_lure_id` is nullable, so users can still add lures by hand
 - Conditions are entered manually for the MVP; auto-filling weather from Open-Meteo is a stretch goal
 - Hosting: Render (API), Neon (Postgres + pgvector), Vercel (frontend). Deployed early (backend in Milestone 1, frontend in Milestone 3) with auto-deploy on merge to `main`; the cold start is handled with a frontend wake-up screen and a keep-warm ping
-- Demo: a shared demo account with a stocked inventory and history, reset nightly, plus a pre-computed real recommendation on the landing page (Milestone 9)
+- Demo: a shared demo account with a stocked inventory and history, reset nightly, plus a pre-computed real recommendation on the landing page (Milestone 9). Demo visitors can't edit free text, and demo recommendations are limited per IP and per day
+- Safeguards: provider spend limits, a per-user daily quota (a count of `recommendations` rows), per-IP rate limiting with `slowapi`, defined LLM failure handling, cost and latency metrics on each recommendation, and prompt injection mitigations (delimited user data, length limits)
 - Backend layers: routers → services → repositories, Pydantic schemas separate from SQLAlchemy models, all schema changes through Alembic
 
 ## Working with Erik
