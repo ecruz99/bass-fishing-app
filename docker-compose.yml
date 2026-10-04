@@ -1,0 +1,24 @@
+# Local development database only. The API runs directly with `uv`.
+# Credentials here are for local development, not secrets: production uses Neon.
+services:
+  db:
+    # Postgres 17 with pgvector preinstalled. Keep the major version in sync with Neon.
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_USER: bass
+      POSTGRES_PASSWORD: bass
+      POSTGRES_DB: bass_fishing
+    ports:
+      # 5433 on the host avoids clashing with another Postgres on the default 5432.
+      # Bound to localhost so the database isn't reachable from the network.
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bass -d bass_fishing"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  db-data:
