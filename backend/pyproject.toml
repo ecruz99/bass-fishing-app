@@ -1,0 +1,33 @@
+[project]
+name = "bass-fishing-api"
+version = "0.1.0"
+description = "JSON API for the bass lure inventory and recommendation app"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "ruff>=0.16.10",
+]
+
+[tool.ruff]
+line-length = 88
+
+[tool.ruff.lint]
+# E/W: pycodestyle, F: pyflakes, I: import sorting, B: likely bugs,
+# UP: modern syntax for the pinned Python version
+select = ["E", "W", "F", "I", "B", "UP"]
+
+[tool.mypy]
+# Non-strict to start; tighten once the codebase settles (see PROJECT_PLAN.md)
+python_version = "3.13"
+files = ["app", "tests"]
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Lets tests import the `app` package without installing it
+pythonpath = ["."]
