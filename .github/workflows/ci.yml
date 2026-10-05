@@ -21,6 +21,23 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # A throwaway database for this run, same image as docker-compose.yml
+    services:
+      db:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: bass
+          POSTGRES_PASSWORD: bass
+          POSTGRES_DB: bass_fishing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bass -d bass_fishing"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://bass:bass@localhost:5432/bass_fishing
     steps:
       # Actions are pinned to a commit SHA, since a tag can be moved to different code
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -41,6 +58,15 @@ jobs:
 
       - name: Type check
         run: uv run mypy
+
+      # Every migration must apply to an empty database, roll all the way back,
+      # and leave no difference between the models and the migrated schema
+      - name: Check migrations
+        run: |
+          uv run alembic upgrade head
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+          uv run alembic check
 
       - name: Test
         run: uv run pytest
