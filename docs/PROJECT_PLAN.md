@@ -48,6 +48,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 **Stack:**
 - Backend: FastAPI (Python)
 - Database: PostgreSQL with the pgvector extension, so embeddings live in the same database instead of a separate vector store
+- Database access: sync SQLAlchemy 2.x with the psycopg 3 driver, not async; simpler to write, test and explain, and FastAPI's thread pool covers this app's traffic (ADR 0002)
 - Frontend: React
 - Web first. The backend is a JSON API that a future mobile client could reuse unchanged. A mobile app is a **stretch goal only** and not part of the core scope.
 
