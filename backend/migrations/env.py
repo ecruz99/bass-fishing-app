@@ -3,6 +3,7 @@ from logging.config import fileConfig
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import app.models  # noqa: F401  # registers the tables on Base.metadata
 from app.config import settings
 from app.db import Base
 
@@ -18,7 +19,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Models register their tables on Base.metadata when imported, which is what
-# autogenerate compares against the database. Import new model modules here.
+# autogenerate compares against the database. New models go in app/models/__init__.py.
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
