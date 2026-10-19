@@ -38,6 +38,8 @@ jobs:
           --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://bass:bass@localhost:5432/bass_fishing
+      # Throwaway value for tests only; the real secret lives in Render
+      JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789
     steps:
       # Actions are pinned to a commit SHA, since a tag can be moved to different code
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
