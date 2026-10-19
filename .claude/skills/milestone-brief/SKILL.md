@@ -16,14 +16,14 @@ The requested mode is $mode. Follow the matching section below.
 For both modes, also read:
 - The sections of **Decisions** in `docs/PROJECT_PLAN.md` that the milestone refers to or depends on (for example "see Evaluation" or "the safeguards from Decisions"), plus the Database Schema and API Sketch entries it touches.
 - Any ADRs in `docs/decisions/` related to the milestone.
-- "Working with Erik" in `CLAUDE.md`, for which pieces Erik hand-writes and how Claude helps with them.
+- "Working with Erik" in `CLAUDE.md`, for which pieces are core pieces and how Claude walks Erik through them.
 
 ## Kickoff mode
 Produce a brief with these parts, in this order:
 1. **What this milestone builds:** two or three sentences in plain language.
 2. **Decisions that apply:** each relevant decision in one line, plus what it looks like in code (for example "token version: a `ver` claim in the JWT, compared in `get_current_user`"). Only decisions this milestone actually uses.
 3. **Still to decide:** the milestone's "Decide" items, each with a recommendation and the main tradeoff. Don't decide them; Erik does.
-4. **Hand-written pieces:** which parts Erik writes, broken into the plan's steps, and any check-ins Claude must remember (for example "ask after auth steps 1 and 2").
+4. **Core pieces:** which parts get the step-by-step, line-by-line walkthrough, broken into the plan's steps, and any check-ins Claude must remember.
 5. **Done when:** the milestone's checklist, as written in the plan.
 6. **Interview questions:** the questions in `docs/INTERVIEW_PREP.md` this milestone will let Erik answer (at most three).
 7. **First step:** one concrete action to start with, such as a decision to make or a branch to create.
@@ -42,5 +42,4 @@ Also read the "Every milestone also includes" list at the top of the Milestones 
 - If any of the arguments are missing, or don't match a milestone in the plan or one of the two modes, ask what they should be before reading files or writing the brief.
 - Keep it to about one screen. Link to the plan for details instead of repeating it.
 - Use plain language, and explain any term Erik hasn't used yet.
-- Don't write implementation code for the hand-written pieces. Describe what they do, not how to code them.
 - Kickoff is read-only: don't create or edit files. In wrap-up, edits to `docs/INTERVIEW_PREP.md` follow its rule in `CLAUDE.md`; ask before changing any other file.

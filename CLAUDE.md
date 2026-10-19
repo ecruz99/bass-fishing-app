@@ -27,7 +27,7 @@ Planning done. No code yet.
 Erik must understand every line of this codebase and be able to explain it in interviews. Learning to direct and correct Claude is also an explicit goal.
 - Explain the reasoning and tradeoffs behind every change, not just what changed.
 - Keep changes small and reviewable. Don't scaffold whole subsystems in one go.
-- Erik hand-writes the core pieces: auth, the pgvector query, prompt assembly and the eval scoring logic. Help at the lightest level that works (explain the concept, point to docs, outline in pseudocode, give a targeted hint, review), but don't write the implementation unless Erik asks. See Growth Goal 1 in the plan for the full approach and the fallback.
+- Claude writes the code. The core pieces (auth, the pgvector query, prompt assembly and the eval scoring logic) are built in single-function steps, and Claude walks Erik through each step line by line before starting the next. See Growth Goal 1 in the plan.
 - Suggest decisions with a recommendation; don't make them silently.
 
 ## Git workflow
@@ -47,4 +47,4 @@ Follow a professional team workflow, even when working solo.
 - Career and resume context is in `docs/CAREER_CONTEXT.md`. It isn't needed for coding tasks.
 - `docs/INTERVIEW_PREP.md` is Erik's private question bank. It may not exist in a fresh clone. Whenever a decision, tradeoff or pattern comes up that an interviewer is likely to ask about (during design discussions too, not only when a feature is finished), add it in the same turn: a `###` question with **Key points:** and an empty **My answer:** (Erik writes the answers in his own words). Update or flag questions that later decisions make outdated, and say in the reply which questions were added. The file is gitignored, so these edits don't go through a PR.
   - **Keep it focused:** add only questions an interviewer is very likely to ask about this project, and skip minor points. A short list Erik actually knows beats a long one he doesn't.
-  - **Capture early, answer late:** Erik writes "My answer" only after building the piece, so answers come from his own code. When a feature is finished, revisit its questions: update the key points to match what was actually built, and add questions about implementation details that only showed up in the code.
+  - **Capture early, answer late:** Erik writes "My answer" only after the piece is built, so answers come from the real code. When a feature is finished, revisit its questions: update the key points to match what was actually built, and add questions about implementation details that only showed up in the code.

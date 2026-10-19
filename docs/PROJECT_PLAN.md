@@ -10,12 +10,11 @@ Shipping the app is only half the point. The project is also a deliberate way fo
 
 ### 1. Understand and explain every part of the codebase
 Nothing gets merged that Erik can't explain line by line. By the end, Erik should be able to walk an interviewer through any file, any design decision and any tradeoff.
-- **Hand-write the core pieces:** password hashing and JWT auth, the pgvector similarity query, the prompt assembly for the LLM, and the eval harness's scoring logic (the scoring functions and the variant comparison; Claude can help with the runner and boilerplate). These are the parts interviewers will ask about most.
-  - **"Hand-written" means Erik types the code and makes the decisions, not that it's written from memory or without help.** Docs, tutorials and questions to Claude are all expected.
-  - **How Claude helps, from lightest to heaviest:** explain the concept → point to the right docs section → outline the steps in plain English or pseudocode → give a targeted hint on a specific line or error → review the finished code. Claude doesn't write the implementation.
-  - **Break the work into single-function steps.** Each step is small enough to finish in one sitting, gets reviewed before moving on, and has tests where it makes sense.
-  - **Fallback if it isn't working:** Claude writes the piece, Erik studies it until every line can be explained, then writes a related feature solo (for auth, a "change password" endpoint). Stuck for an hour on one line? Ask for a bigger hint rather than grinding.
-  - **The test for any code, whoever typed it:** could Erik rebuild it from a blank file, using the docs, in a reasonable amount of time?
+- **Claude writes the code; Erik designs, directs, reviews and owns it.** The original plan had Erik hand-write the core pieces. That was dropped in October 2026 to save time: typing the code was the slowest part of the project and not what interviews test. Understanding it is, so the bar below stays the same.
+- **The core pieces get a closer walkthrough:** password hashing and JWT auth, the pgvector similarity query, the prompt assembly for the LLM, and the eval harness's scoring logic (the scoring functions and the variant comparison). These are the parts interviewers will ask about most.
+  - **Built in single-function steps.** Each step is small, has tests where it makes sense, and is its own reviewable change.
+  - **Claude walks through each step line by line** (what each line does, why it's written that way, and the alternatives) before the next one starts. Erik asks until nothing is unclear.
+- **The test for any code:** could Erik rebuild it from a blank file, using the docs, in a reasonable amount of time?
 - **Explain-back rule:** after each feature, Erik explains it out loud or in writing (what it does, why it's built that way, and what the alternatives were) before moving on. If the explanation has gaps, go back to the code.
 - **Walkthrough notes:** keep short notes in `docs/walkthroughs/` for each major flow (signup to login to an authenticated request; adding a lure; a recommendation request from start to finish).
 - **Interview question bank:** keep a running list of questions an interviewer might ask ("Why pgvector instead of Pinecone?", "How do you keep JWTs from being forged?", "What happens if the LLM recommends a lure the user doesn't own?"), and practice answering them. It stays private: `docs/INTERVIEW_PREP.md` is gitignored and backed up in Erik's notes app.
@@ -59,13 +58,13 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **AI providers:** Claude (Anthropic API) generates the recommendations. Voyage AI creates the embeddings; Anthropic recommends it, since Anthropic has no embeddings API of its own. That means two API keys, both kept in environment variables and never committed.
 
-**Auth:** Written by hand with JWT in FastAPI: password hashing (Argon2 via `pwdlib`, the library the current FastAPI docs use), short-lived access tokens, and a `get_current_user` dependency. Chosen over FastAPI-Users or a hosted service because Erik should understand and be able to explain every line, and a mobile client could reuse it.
+**Auth:** Built directly with JWT in FastAPI, without an auth framework: password hashing (Argon2 via `pwdlib`, the library the current FastAPI docs use), short-lived access tokens, and a `get_current_user` dependency. Chosen over FastAPI-Users or a hosted service because Erik should understand and be able to explain every line, and a mobile client could reuse it.
 - **Revocation through a token version:** `users.token_version` (an integer) is included in every JWT, and `get_current_user` rejects tokens whose version doesn't match. Incrementing it invalidates every token the user holds. `get_current_user` already loads the user from the database, so the check costs nothing extra. Regular logout just discards the token on the client.
 - **Change password** (while logged in) increments `token_version`, which logs out the user's other sessions. **Log out everywhere** increments it directly.
 - **Login rate limiting:** `slowapi` limits per IP and per email (for example 5 attempts per minute), from Milestone 1. No account lockout, because lockout lets an attacker lock real users out by failing on purpose.
 - **Error messages:** login says "invalid email or password" without revealing which was wrong. Signup does reveal "email already registered"; that's an accepted tradeoff for usability.
 - **Out of scope for launch:** refresh tokens, password reset and email verification (reset and verification need an email provider). All three are stretch goals, and the README lists them as deliberate gaps.
-- **How to describe it:** "Implemented JWT authentication from scratch with PyJWT and pwdlib (Argon2): no auth framework, and no hand-written cryptography." Avoid "hand-written auth," which can sound like rolling your own crypto.
+- **How to describe it:** "JWT authentication built on PyJWT and pwdlib (Argon2): no auth framework, and no custom cryptography." Avoid "from scratch," which can sound like rolling your own crypto.
 
 **Condition input:** Manual form entry for the MVP. Auto-filling from Open-Meteo (free, no API key) using the user's location is a stretch goal. It shouldn't hold up the core RAG pipeline.
 
@@ -111,7 +110,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **Presenting the AI-assisted development:** every commit already carries a `Co-Authored-By: Claude` line, so the README tells the same story the history shows. The framing is "directed and verified," backed by evidence:
 - **A short "How this was built" README section:** CLAUDE.md, hooks, small reviewed PRs, the explain-back rule, and a link to `docs/CLAUDE_LESSONS.md`.
-- **An explicit list of what Erik hand-wrote:** auth, the pgvector query, prompt assembly and the eval scoring logic. This list gives the rest of the story its credibility.
+- **Honest about who typed it:** Claude wrote most of the code; Erik designed it, reviewed every diff and can explain every line. Name the core pieces (auth, the pgvector query, prompt assembly and the eval scoring logic) as the ones built step by step with line-by-line walkthroughs. Being upfront gives the rest of the story its credibility.
 - **Keep it short:** the app and the eval results lead, and the process supports them. A longer blog or LinkedIn write-up is optional in Milestone 12.
 
 **Showing the reasoning:** a reviewer who doesn't fish can't judge whether a recommendation is good, but they can judge visible, traceable reasoning.
@@ -235,10 +234,10 @@ Every milestone also includes:
 - From Milestone 1 on, the merged work is live: check the deployed app, not just the local one
 
 ### Milestone 1: Backend foundation and auth
-Set up the repo structure, the layered backend skeleton, Alembic, and the development tooling: `uv`, `ruff`, `mypy`, docker-compose for local Postgres with pgvector, the CI workflow, branch protection, and the Claude Code and pre-commit formatting hooks. Hand-write signup, login and the JWT dependency. Deploy the backend to Render and Neon as a walking skeleton.
+Set up the repo structure, the layered backend skeleton, Alembic, and the development tooling: `uv`, `ruff`, `mypy`, docker-compose for local Postgres with pgvector, the CI workflow, branch protection, and the Claude Code and pre-commit formatting hooks. Build signup, login and the JWT dependency. Deploy the backend to Render and Neon as a walking skeleton.
 - **Decide:** where the frontend stores tokens (in memory with an `Authorization` header, or an httpOnly cookie). Look up the XSS/CSRF tradeoff and write an ADR.
-- **Write ADRs:** stack, RAG vs. a trained model, hand-written auth.
-- **Auth, hand-written in single-function steps** (Erik writes each one; Claude explains, points to docs and reviews):
+- **Write ADRs:** stack, RAG vs. a trained model, auth without a framework.
+- **Auth, in single-function steps** (Claude writes each one and walks through it line by line; Erik reviews it before the next):
   1. Hash a password and verify one (`pwdlib`), with tests
   2. Create a JWT with an expiry and the user's token version
   3. Decode and validate a JWT, rejecting ones that are expired or have a bad signature
@@ -248,7 +247,6 @@ Set up the repo structure, the layered backend skeleton, Alembic, and the develo
   7. The change password endpoint (increments `token_version`)
   8. The log out everywhere endpoint
 - **Rate limiting:** set up `slowapi` with limits on signup and on login (per IP and per email).
-- **Check-in (Claude: ask Erik after auth steps 1 and 2):** is the step-by-step approach working? If yes, continue through step 8. If it feels like no progress is being made, switch to the fallback in Growth Goal 1: Claude writes steps 3 to 6, Erik learns them until they can be explained line by line, then writes steps 7 and 8 (change password and log out everywhere) alone.
 - **Deploy:** a `/health` endpoint; the backend on Render and the database on Neon (with pgvector enabled); migrations run as part of each deploy; auto-deploy on merge to `main`; secrets only in Render's environment variables. Check Render's terms of service, then set up the keep-warm ping.
 - **Done when:** a user can sign up, log in and call a protected endpoint, **on the live API**; changing the password or logging out everywhere makes old tokens fail (with a test); login and signup are rate limited (with a test); migrations run cleanly from an empty database, locally and on Neon; merging to `main` deploys automatically; the auth logic has pytest tests; `docker compose up` gives a fresh clone a working local database; CI runs on every PR, and `main` can't be merged into while CI fails.
 
@@ -279,7 +277,7 @@ Add the safeguards from Decisions: the per-user quota, per-IP rate limiting on r
 - **Done when:** `POST /recommendations` returns reasoned picks drawn only from the user's inventory; results are saved with their metrics, condition columns and `recommendation_picks` rows; a rating can record which pick was used; responses include entry titles, sources and scores but never entry content (with a test); ratings work; the quota and rate limits reject excess requests (with tests); timeouts, malformed output, invalid IDs and provider errors are handled (with tests that mock the API); failures appear in the logs; it's been tested against realistic combinations of conditions, including an empty or tiny inventory.
 
 ### Milestone 6: Evaluation
-Build the eval harness and run all four variants (see Evaluation). Erik hand-writes the scoring functions and the variant comparison; Claude can help with the runner and boilerplate.
+Build the eval harness and run all four variants (see Evaluation). The scoring functions and the variant comparison are core pieces, built step by step with line-by-line walkthroughs (see Growth Goal 1).
 - **Decide:** where the harness lives in the repo and the format of the scenario files.
 - **Done when:** all four variants run on every scenario (about 3 runs each); picks, retrieval and citation accuracy are scored by code; Erik has reviewed a sample of the reasoning; the final numbers come from the held-out set; a results table and short write-up are drafted for the README.
 - **Check-in (Claude: ask Erik when this milestone is finished):** based on the results, should stage 2 of the knowledge base (the larger expansion) happen before launch or after? Re-run the eval after the expansion either way.
@@ -302,7 +300,7 @@ Erik curates a data file (JSON or CSV) of 30 to 50 popular bass lures, storing f
 - **Done when:** the seed script can be re-run safely without creating duplicates; users can search the catalog and add a lure from it, or still add one by hand; catalog entries use the same fixed `type` and `technique` lists as `lures`.
 
 ### Milestone 11: Demo and polish
-The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus enough past recommendations with ratings, including which lure was used, and enough catches for the analytics charts to show real data), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Add what real users need before they sign up: the privacy note, account deletion and a feedback channel. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, the "How this was built" section with the hand-written list, and a note about the free tier's slow first request).
+The app has been live since Milestone 1, so this milestone is about the first impression. Build the shared demo account (seed data: a realistic inventory plus enough past recommendations with ratings, including which lure was used, and enough catches for the analytics charts to show real data), its nightly reset, its recommendation limits and its locked free-text fields, the landing page with a pre-computed real recommendation, and a "Try the demo" button. Add what real users need before they sign up: the privacy note, account deletion and a feedback channel. Polish the UI and write the README (including an architecture diagram, the eval results table from Milestone 6, the "How this was built" section, and a note about the free tier's slow first request).
 - **Decide:** how the nightly reset runs (for example a scheduled GitHub Actions workflow, which could also run the keep-warm ping).
 - **Done when:** a first-time visitor sees a real recommendation within 10 seconds of opening the URL, without signing up; the demo data resets every night; the demo limits fall back to the landing page sample; demo visitors can't edit `name` or `notes`; a user can delete their account and all their data (with a test), but the demo account can't be deleted; the privacy note and feedback channel are live; the live URL works for a brand-new user; secrets are only in environment variables; the README explains how to run the app locally and how it works.
 
