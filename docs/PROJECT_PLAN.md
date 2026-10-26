@@ -60,6 +60,7 @@ Learn to use AI coding tools the way a strong engineer would: as an assistant Er
 
 **Auth:** Built directly with JWT in FastAPI, without an auth framework: password hashing (Argon2 via `pwdlib`, the library the current FastAPI docs use), short-lived access tokens, and a `get_current_user` dependency. Chosen over FastAPI-Users or a hosted service because Erik should understand and be able to explain every line, and a mobile client could reuse it.
 - **Access tokens:** signed with HS256 using a secret of at least 32 characters (`JWT_SECRET_KEY`, checked at startup), and valid for 60 minutes (`ACCESS_TOKEN_EXPIRE_MINUTES`). Claims: `sub` (user id), `ver` (token version), `iat` and `exp`. Sixty minutes balances how long a stolen token works against logging in again, since there are no refresh tokens yet.
+- **Token transport:** the client sends `Authorization: Bearer <token>` and keeps the token in `localStorage` (ADR 0003). No CSRF exposure; XSS is the main risk, limited by React's escaping and the 60-minute lifetime. An httpOnly cookie was rejected because the frontend (Vercel) and API (Render) are different sites. Revisit with refresh tokens.
 - **Revocation through a token version:** `users.token_version` (an integer) is included in every JWT, and `get_current_user` rejects tokens whose version doesn't match. Incrementing it invalidates every token the user holds. `get_current_user` already loads the user from the database, so the check costs nothing extra. Regular logout just discards the token on the client.
 - **Change password** (while logged in) increments `token_version`, which logs out the user's other sessions. **Log out everywhere** increments it directly.
 - **Login rate limiting:** `slowapi` limits per IP and per email (for example 5 attempts per minute), from Milestone 1. No account lockout, because lockout lets an attacker lock real users out by failing on purpose.
@@ -236,7 +237,7 @@ Every milestone also includes:
 
 ### Milestone 1: Backend foundation and auth
 Set up the repo structure, the layered backend skeleton, Alembic, and the development tooling: `uv`, `ruff`, `mypy`, docker-compose for local Postgres with pgvector, the CI workflow, branch protection, and the Claude Code and pre-commit formatting hooks. Build signup, login and the JWT dependency. Deploy the backend to Render and Neon as a walking skeleton.
-- **Decide:** where the frontend stores tokens (in memory with an `Authorization` header, or an httpOnly cookie). Look up the XSS/CSRF tradeoff and write an ADR.
+- **Decided:** where the frontend stores tokens: an `Authorization: Bearer` header, with the token in `localStorage` (ADR 0003).
 - **Write ADRs:** stack, RAG vs. a trained model, auth without a framework.
 - **Auth, in single-function steps** (Claude writes each one and walks through it line by line; Erik reviews it before the next):
   1. Hash a password and verify one (`pwdlib`), with tests
