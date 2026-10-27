@@ -7,3 +7,7 @@ database errors inside the repositories and HTTP details inside the routers.
 
 class EmailAlreadyRegisteredError(Exception):
     """Signup used an email that another account already has."""
+
+
+class InvalidCredentialsError(Exception):
+    """Login failed. Deliberately doesn't say whether the email or password was wrong."""
