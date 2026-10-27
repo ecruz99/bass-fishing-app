@@ -3,7 +3,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.models import User
-from app.schemas.auth import SignupRequest, UserResponse
+from app.schemas.auth import LoginRequest, SignupRequest, UserResponse
 
 
 def test_signup_request_accepts_valid_input() -> None:
@@ -30,6 +30,18 @@ def test_signup_request_accepts_password_length_limits(length: int) -> None:
 def test_signup_request_rejects_password_outside_limits(length: int) -> None:
     with pytest.raises(ValidationError):
         SignupRequest(email="angler@example.com", password="x" * length)
+
+
+@pytest.mark.parametrize("length", [0, 1, 128])
+def test_login_request_accepts_any_password_up_to_the_cap(length: int) -> None:
+    request = LoginRequest(email="angler@example.com", password="x" * length)
+
+    assert len(request.password) == length
+
+
+def test_login_request_rejects_password_over_the_cap() -> None:
+    with pytest.raises(ValidationError):
+        LoginRequest(email="angler@example.com", password="x" * 129)
 
 
 def test_user_response_leaves_out_private_fields(db_session: Session) -> None:
