@@ -10,4 +10,4 @@ class EmailAlreadyRegisteredError(Exception):
 
 
 class InvalidCredentialsError(Exception):
-    """Login failed. Deliberately doesn't say whether the email or password was wrong."""
+    """Login failed. Deliberately doesn't say if the email or the password was wrong."""

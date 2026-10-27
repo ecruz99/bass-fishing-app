@@ -1,22 +1,9 @@
-from collections.abc import Iterator
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-
-from app.db import get_db
-from app.main import app
 
 SIGNUP_URL = "/api/v1/auth/signup"
-
-
-@pytest.fixture
-def client(db_session: Session) -> Iterator[TestClient]:
-    # Requests use the test's rolled-back session instead of a real one
-    app.dependency_overrides[get_db] = lambda: db_session
-    yield TestClient(app)
-    app.dependency_overrides.clear()
 
 
 def test_signup_creates_user(client: TestClient) -> None:
