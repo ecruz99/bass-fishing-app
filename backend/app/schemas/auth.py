@@ -12,6 +12,22 @@ class SignupRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class LoginRequest(BaseModel):
+    """The body of POST /api/v1/auth/login."""
+
+    email: EmailStr
+    # Only the cap that protects Argon2. A minimum would lock out existing users
+    # if the signup rules ever got stricter.
+    password: str = Field(max_length=128)
+
+
+class TokenResponse(BaseModel):
+    """A successful login: the OAuth2 response shape most clients expect."""
+
+    access_token: str
+    token_type: str = "bearer"
+
+
 class UserResponse(BaseModel):
     """A user as the API returns it. Never includes the password hash."""
 
