@@ -1,3 +1,4 @@
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,11 @@ from app.models import User
 def get_user_by_id(db: Session, user_id: int) -> User | None:
     """The user with this id, or None if there isn't one (for example, deleted)."""
     return db.get(User, user_id)
+
+
+def get_user_by_email(db: Session, email: str) -> User | None:
+    """The user with this email, or None. Expects it already lowercased, as stored."""
+    return db.scalar(select(User).where(User.email == email))
 
 
 def create_user(db: Session, email: str, hashed_password: str) -> User:
